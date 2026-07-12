@@ -1171,22 +1171,55 @@ body.cart-open {
     display: block;
   }
   .menu {
-    position: fixed;
-    inset: 78px 0 0;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: calc(100dvh - 78px);
     background: #fff;
     transform: translateX(100%);
-    transition: 0.28s;
-    padding: 36px 24px;
+    opacity: 0;
+    visibility: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transition:
+      transform 0.32s ease,
+      opacity 0.22s ease,
+      visibility 0.32s;
+    padding: 34px 24px 60px;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 30px 60px rgba(3, 18, 10, 0.12);
   }
   .menu-open .menu {
     transform: none;
+    opacity: 1;
+    visibility: visible;
   }
   .menu ul {
     display: grid;
+    gap: 6px;
+    width: min(100%, 560px);
+    margin: 0 auto;
   }
   .menu a {
-    font-size: 1.3rem;
-    padding: 15px;
+    display: flex;
+    align-items: center;
+    min-height: 64px;
+    padding: 12px 18px;
+    border-radius: 16px;
+    font: 800 clamp(1.15rem, 5vw, 1.45rem) Montserrat;
+    transition:
+      background 0.2s,
+      color 0.2s;
+  }
+  .menu a:hover,
+  .menu a.active {
+    background: #eaf5ed;
+    color: var(--green);
+  }
+  .menu a::after {
+    display: none;
   }
   .hero {
     min-height: 650px;
