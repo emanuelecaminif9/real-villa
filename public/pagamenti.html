@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Completa l'iscrizione | Real Villa</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="header">
+      <a href="index.html"
+        ><img class="header-logo" src="logo.svg" alt="Real Villa"
+      /></a>
+      <nav class="menu" id="main-menu" aria-label="Navigazione principale">
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="lastoria.html">Società</a></li>
+          <li><a href="Iscrizioni.html">Iscrizioni</a></li>
+          <li><a href="Shop.html">Shop</a></li>
+        </ul>
+      </nav>
+      <a class="header-cta" href="Contatti.html">Contatti</a
+      ><button
+        type="button"
+        class="hamburger"
+        aria-label="Apri menu"
+        aria-controls="main-menu"
+      >
+        <span></span>
+      </button>
+    </header>
+    <main>
+      <section class="page-hero">
+        <div class="container">
+          <span class="eyebrow">Iscrizione online</span>
+          <h1>Completa i dati.</h1>
+          <p>
+            Inserisci le informazioni richieste e verrai indirizzato al
+            pagamento sicuro.
+          </p>
+        </div>
+      </section>
+      <section class="section">
+        <div class="container payment-wrap">
+          <aside class="payment-info">
+            <span class="eyebrow">Real Villa</span>
+            <h2>Un passo dalla squadra.</h2>
+            <p>
+              I dati vengono utilizzati esclusivamente per gestire la richiesta
+              e il pagamento dell’iscrizione.
+            </p>
+            <div class="subscription-summary">
+              <div>
+                <span>Oggi</span><strong>€50,00</strong
+                ><small>Prima iscrizione</small>
+              </div>
+              <div>
+                <span>Dal mese successivo</span><strong>€50,00/mese</strong
+                ><small>Abbonamento disdettabile</small>
+              </div>
+            </div>
+          </aside>
+          <div class="payment-box">
+            <form id="iscrizioneForm" class="payment-form">
+              <div>
+                <label for="nome_ragazzo">Nome e cognome atleta</label
+                ><input
+                  id="nome_ragazzo"
+                  type="text"
+                  name="nome_ragazzo"
+                  required
+                />
+              </div>
+              <div>
+                <label for="nome_genitore">Nome e cognome genitore</label
+                ><input
+                  id="nome_genitore"
+                  type="text"
+                  name="nome_genitore"
+                  required
+                />
+              </div>
+              <div>
+                <label for="email">Email</label
+                ><input id="email" type="email" name="email" required />
+              </div>
+              <div>
+                <label for="telefono">Telefono</label
+                ><input id="telefono" type="tel" name="telefono" required />
+              </div>
+              <div>
+                <label for="pacchetto">Categoria</label
+                ><select id="pacchetto" name="pacchetto" required>
+                  <option value="">Seleziona una categoria</option>
+                  <option value="piccoli-campioni">
+                    Piccoli Campioni (2019–2020)
+                  </option>
+                  <option value="primi-calci">Primi Calci (2017–2018)</option>
+                  <option value="dal-2017">Pulcini e oltre (dal 2016)</option>
+                </select>
+              </div>
+              <fieldset class="registration-payment-choice">
+                <legend>Metodo di pagamento</legend>
+                <label
+                  ><input
+                    type="radio"
+                    name="provider"
+                    value="paypal"
+                    checked
+                  /><span
+                    ><strong>PayPal</strong
+                    ><small
+                      >Iscrizione e rinnovo mensile con PayPal</small
+                    ></span
+                  ></label
+                >
+                <label
+                  ><input type="radio" name="provider" value="nexi" /><span
+                    ><strong>Carta · Nexi</strong
+                    ><small>Pagamento sicuro e rinnovo automatico</small></span
+                  ></label
+                >
+              </fieldset>
+              <p class="recurring-consent">
+                Proseguendo autorizzi il pagamento iniziale di 50 € e il
+                successivo addebito di 50 € ogni mese, fino alla disdetta.
+              </p>
+              <button type="submit" class="button">Conferma e procedi</button>
+            </form>
+            <button type="button" id="gestisciAbbonamento" class="manage-btn">
+              Gestisci o disdici un abbonamento esistente
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <img class="footer-logo" src="logo.svg" alt="Real Villa" />
+            <p>Entra nella famiglia Real Villa.</p>
+          </div>
+          <div>
+            <h4>Informazioni</h4>
+            <div class="footer-links">
+              <a href="lastoria.html">Società</a>
+              <a href="Iscrizioni.html">Iscrizioni</a>
+            </div>
+          </div>
+          <div>
+            <h4>Assistenza</h4>
+            <div class="footer-links">
+              <a href="mailto:realvillacalcio@gmail.com">Scrivici via email</a>
+              <a href="tel:+393500734960">350&nbsp;073&nbsp;4960</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom"><span>© 2026 ASD Real Villa</span></div>
+      </div>
+    </footer>
+    <div class="page-transition">
+      <img class="transition-logo" src="transizione.svg" alt="" />
+    </div>
+    <script src="app.js"></script>
+    <script>
+      const form = document.getElementById("iscrizioneForm");
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const button = form.querySelector("button");
+        button.disabled = true;
+        button.textContent = "Caricamento…";
+        try {
+          const data = Object.fromEntries(new FormData(form).entries());
+          const provider = data.provider;
+          delete data.provider;
+          const res = await fetch("/api/payments/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              context: "registration",
+              provider,
+              registration: data,
+            }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || "Errore nel pagamento");
+          if (result.url) location.href = result.url;
+        } catch (err) {
+          alert(err.message);
+          button.disabled = false;
+          button.textContent = "Conferma e procedi";
+        }
+      });
+      document
+        .getElementById("gestisciAbbonamento")
+        .addEventListener("click", async () => {
+          const email = prompt("Inserisci l'email usata per l'iscrizione:");
+          if (!email) return;
+          const telefono = prompt(
+            "Inserisci il numero di telefono usato per l'iscrizione:",
+          );
+          if (!telefono) return;
+          try {
+            if (
+              !confirm("Vuoi disdire l'abbonamento associato a questa email?")
+            )
+              return;
+            const res = await fetch("/api/subscriptions/cancel", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, telefono }),
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error || "Errore");
+            alert(result.message || "Abbonamento disdetto correttamente");
+          } catch (err) {
+            alert(err.message);
+          }
+        });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Shop | Real Villa</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="header">
+      <a href="index.html"
+        ><img class="header-logo" src="logo.svg" alt="Real Villa"
+      /></a>
+      <nav class="menu" id="main-menu" aria-label="Navigazione principale">
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="lastoria.html">Società</a></li>
+          <li><a href="Iscrizioni.html">Iscrizioni</a></li>
+          <li><a href="Shop.html">Shop</a></li>
+        </ul>
+      </nav>
+      <a class="header-cta" href="Contatti.html">Contatti</a
+      ><button
+        type="button"
+        class="shop-cart-trigger"
+        id="openCart"
+        aria-label="Apri il carrello"
+      >
+        Carrello <span id="cartCount">0</span></button
+      ><button
+        type="button"
+        class="hamburger"
+        aria-label="Apri menu"
+        aria-controls="main-menu"
+      >
+        <span></span>
+      </button>
+    </header>
+    <main>
+      <section class="page-hero">
+        <div class="container">
+          <span class="eyebrow">Abbigliamento ufficiale</span>
+          <h1>Indossa i nostri colori.</h1>
+          <p>
+            Kit gara, materiale da allenamento e accessori per vivere Real Villa
+            dentro e fuori dal campo.
+          </p>
+        </div>
+      </section>
+      <section class="section">
+        <div class="container">
+          <div class="shop-heading">
+            <div>
+              <span class="eyebrow">Collezione ufficiale</span>
+              <h2>Scegli i prodotti Real Villa.</h2>
+            </div>
+            <p>
+              Seleziona la taglia, aggiungi i prodotti al carrello e completa
+              l’ordine con pagamento sicuro.
+            </p>
+          </div>
+          <div class="product-grid">
+            <article class="product-card" data-product-id="kit-gara">
+              <img
+                src="prodotto-kit-gara.png"
+                alt="Kit gara ufficiale Real Villa"
+              />
+              <div class="product-card-body">
+                <span class="product-category">Divisa ufficiale</span>
+                <div class="product-title-row">
+                  <h3>Kit gara</h3>
+                  <strong>€65,00</strong>
+                </div>
+                <p>Maglia, pantaloncini e calzettoni nei colori del club.</p>
+                <label
+                  >Taglia
+                  <select class="product-size" aria-label="Taglia kit gara">
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M" selected>M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                  </select>
+                </label>
+                <button type="button" class="button add-to-cart">
+                  Aggiungi al carrello
+                </button>
+              </div>
+            </article>
+            <article class="product-card" data-product-id="kit-allenamento">
+              <img
+                src="prodotto-kit-allenamento.png"
+                alt="Kit allenamento ufficiale Real Villa"
+              />
+              <div class="product-card-body">
+                <span class="product-category">Allenamento</span>
+                <div class="product-title-row">
+                  <h3>Kit allenamento</h3>
+                  <strong>€55,00</strong>
+                </div>
+                <p>
+                  Completo tecnico con maglia, pantaloncini, tuta e calzettoni.
+                </p>
+                <label
+                  >Taglia
+                  <select
+                    class="product-size"
+                    aria-label="Taglia kit allenamento"
+                  >
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M" selected>M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                  </select>
+                </label>
+                <button type="button" class="button add-to-cart">
+                  Aggiungi al carrello
+                </button>
+              </div>
+            </article>
+            <article class="product-card" data-product-id="zaino">
+              <img src="prodotto-zaino.png" alt="Zaino ufficiale Real Villa" />
+              <div class="product-card-body">
+                <span class="product-category">Accessori</span>
+                <div class="product-title-row">
+                  <h3>Zaino</h3>
+                  <strong>€35,00</strong>
+                </div>
+                <p>Zaino sportivo capiente con tasche e stemma del club.</p>
+                <input
+                  class="product-size"
+                  type="hidden"
+                  value="Taglia unica"
+                />
+                <button type="button" class="button add-to-cart">
+                  Aggiungi al carrello
+                </button>
+              </div>
+            </article>
+            <article class="product-card" data-product-id="calzini">
+              <img
+                src="prodotto-calzini.png"
+                alt="Calzini ufficiali Real Villa"
+              />
+              <div class="product-card-body">
+                <span class="product-category">Accessori</span>
+                <div class="product-title-row">
+                  <h3>Calzini</h3>
+                  <strong>€12,00</strong>
+                </div>
+                <p>Calzini tecnici al ginocchio con stemma Real Villa.</p>
+                <label
+                  >Taglia
+                  <select class="product-size" aria-label="Taglia calzini">
+                    <option value="31-34">31–34</option>
+                    <option value="35-38" selected>35–38</option>
+                    <option value="39-42">39–42</option>
+                    <option value="43-46">43–46</option>
+                  </select>
+                </label>
+                <button type="button" class="button add-to-cart">
+                  Aggiungi al carrello
+                </button>
+              </div>
+            </article>
+          </div>
+          <div class="shop-assurance">
+            <div>
+              <strong>Pagamento sicuro</strong
+              ><span>Checkout protetto tramite PayPal e Nexi</span>
+            </div>
+            <div>
+              <strong>Ordine semplice</strong
+              ><span>Modifica quantità e taglie dal carrello</span>
+            </div>
+            <div>
+              <strong>Assistenza diretta</strong
+              ><span>Contattaci per qualsiasi informazione</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <div class="cart-overlay" id="cartOverlay" hidden></div>
+    <aside
+      class="cart-drawer"
+      id="cartDrawer"
+      aria-hidden="true"
+      aria-labelledby="cartTitle"
+    >
+      <div class="cart-head">
+        <div>
+          <span class="eyebrow">Il tuo ordine</span>
+          <h2 id="cartTitle">Carrello</h2>
+        </div>
+        <button
+          type="button"
+          class="cart-close"
+          id="closeCart"
+          aria-label="Chiudi il carrello"
+        >
+          ×
+        </button>
+      </div>
+      <div class="cart-items" id="cartItems"></div>
+      <div class="cart-empty" id="cartEmpty">
+        <strong>Il carrello è vuoto.</strong
+        ><span>Aggiungi uno dei prodotti ufficiali Real Villa.</span>
+      </div>
+      <div class="cart-summary">
+        <div><span>Totale</span><strong id="cartTotal">€0,00</strong></div>
+        <div class="payment-choice">
+          <span>Scegli come pagare</span>
+          <button
+            type="button"
+            class="button checkout-button paypal-button"
+            data-provider="paypal"
+          >
+            Paga con PayPal
+          </button>
+          <button
+            type="button"
+            class="button checkout-button nexi-button"
+            data-provider="nexi"
+          >
+            Paga con carta · Nexi
+          </button>
+        </div>
+        <p>
+          Pagamento gestito in modo sicuro da PayPal o Nexi. Spedizione o ritiro
+          saranno concordati con la società.
+        </p>
+      </div>
+    </aside>
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <img class="footer-logo" src="logo.svg" alt="Real Villa" />
+            <p>Porta sempre con te i colori del club.</p>
+          </div>
+          <div>
+            <h4>Club</h4>
+            <div class="footer-links">
+              <a href="lastoria.html">Società</a
+              ><a href="Iscrizioni.html">Iscrizioni</a>
+            </div>
+          </div>
+          <div>
+            <h4>Ordini</h4>
+            <div class="footer-links">
+              <a href="Contatti.html">Contattaci</a
+              ><a href="tel:+393500734960">350 073 4960</a>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom"><span>© 2026 ASD Real Villa</span></div>
+      </div>
+    </footer>
+    <div class="page-transition">
+      <img class="transition-logo" src="transizione.svg" alt="" />
+    </div>
+    <script src="app.js"></script>
+    <script src="shop.js"></script>
+  </body>
+</html>

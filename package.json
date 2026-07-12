@@ -1,0 +1,22 @@
+{
+  "name": "real-villa",
+  "version": "1.0.0",
+  "description": "Sito ASD Real Villa con shop, PayPal e Nexi XPay",
+  "main": "server.js",
+  "scripts": {
+    "test": "node --check server.js && node --check payments.js && node --check public/app.js && node --check public/shop.js",
+    "start": "node server.js",
+    "setup:paypal": "node scripts/create-paypal-plan.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

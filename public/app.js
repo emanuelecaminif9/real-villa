@@ -1,0 +1,44 @@
+const toggle = document.querySelector(".hamburger");
+const closeMenu = () => {
+  document.body.classList.remove("menu-open");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Apri menu");
+  }
+};
+if (toggle) {
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.addEventListener("click", () => {
+    const isOpen = document.body.classList.toggle("menu-open");
+    toggle.setAttribute("aria-expanded", String(isOpen));
+    toggle.setAttribute("aria-label", isOpen ? "Chiudi menu" : "Apri menu");
+  });
+}
+document
+  .querySelectorAll(".menu a")
+  .forEach((a) => a.addEventListener("click", closeMenu));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeMenu();
+});
+const page = (location.pathname.split("/").pop() || "index.html").toLowerCase();
+document.querySelectorAll(".menu a").forEach((a) => {
+  if ((a.getAttribute("href") || "").toLowerCase() === page)
+    a.classList.add("active");
+});
+document.querySelectorAll("a[href]").forEach((link) =>
+  link.addEventListener("click", (e) => {
+    const href = link.getAttribute("href");
+    if (
+      !href ||
+      href.startsWith("#") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:") ||
+      href.startsWith("https:") ||
+      link.target === "_blank"
+    )
+      return;
+    e.preventDefault();
+    document.body.classList.add("is-transitioning");
+    setTimeout(() => (location.href = href), 260);
+  }),
+);
