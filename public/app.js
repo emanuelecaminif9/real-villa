@@ -42,3 +42,16 @@ document.querySelectorAll("a[href]").forEach((link) =>
     setTimeout(() => (location.href = href), 260);
   }),
 );
+function resetPageTransition() {
+  document.body.classList.remove("is-transitioning");
+  document.body.classList.remove("menu-open");
+}
+
+window.addEventListener("pageshow", resetPageTransition);
+window.addEventListener("popstate", resetPageTransition);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    resetPageTransition();
+  }
+});
