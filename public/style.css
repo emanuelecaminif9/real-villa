@@ -1360,3 +1360,56 @@ body.cart-open {
     padding: 35px 24px;
   }
 }
+/* BLOCCO SCHERMO E CORREZIONE SCORRIMENTO LATERALE */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+header,
+main,
+footer,
+section {
+  max-width: 100%;
+}
+
+img,
+video,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Blocca la pagina dietro al menu hamburger */
+body.menu-open {
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+body.menu-open main,
+body.menu-open footer {
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .header {
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  .menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    width: 100vw;
+    height: calc(100dvh - 78px);
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
