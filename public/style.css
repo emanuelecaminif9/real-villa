@@ -201,7 +201,7 @@ select {
       rgba(3, 18, 10, 0.63) 48%,
       rgba(3, 18, 10, 0.18) 100%
     ),
-    url("home.svg") center/cover no-repeat;
+    url("home.webp") center/cover no-repeat;
   color: #fff;
 }
 .hero:after {
@@ -423,7 +423,7 @@ select {
   width: min(1160px, calc(100% - 40px));
   background:
     linear-gradient(105deg, rgba(11, 107, 58, 0.96), rgba(7, 19, 13, 0.9)),
-    url("cover.svg") center/cover;
+    url("cover.webp") center/cover;
   border-radius: 32px;
   padding: 60px;
   color: #fff;
@@ -450,7 +450,7 @@ select {
   padding: 80px 0;
   background:
     linear-gradient(rgba(3, 18, 10, 0.75), rgba(3, 18, 10, 0.75)),
-    url("cover.svg") center/cover;
+    url("cover.webp") center/cover;
   color: #fff;
 }
 .page-hero h1 {

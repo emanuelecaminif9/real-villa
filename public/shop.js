@@ -2,25 +2,25 @@ const SHOP_PRODUCTS = {
   "kit-gara": {
     name: "Kit gara",
     price: 6500,
-    image: "prodotto-kit-gara.png",
+    image: "prodotto-kit-gara.webp",
     sizes: ["XS", "S", "M", "L", "XL", "XXL"],
   },
   "kit-allenamento": {
     name: "Kit allenamento",
     price: 5500,
-    image: "prodotto-kit-allenamento.png",
+    image: "prodotto-kit-allenamento.webp",
     sizes: ["XS", "S", "M", "L", "XL", "XXL"],
   },
   zaino: {
     name: "Zaino",
     price: 3500,
-    image: "prodotto-zaino.png",
+    image: "prodotto-zaino.webp",
     sizes: ["Taglia unica"],
   },
   calzini: {
     name: "Calzini",
     price: 1200,
-    image: "prodotto-calzini.png",
+    image: "prodotto-calzini.webp",
     sizes: ["31-34", "35-38", "39-42", "43-46"],
   },
 };
