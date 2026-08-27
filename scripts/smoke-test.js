@@ -10,6 +10,9 @@ const server = app.listen(0, "127.0.0.1", async () => {
   let exitCode = 0;
   try {
     const checkout = await fetch(`${base}/checkout.html`);
+    const area = await fetch(`${base}/i-miei-pagamenti.html`);
+    const staff = await fetch(`${base}/segreteria.html`);
+    const terms = await fetch(`${base}/condizioni-pagamenti.html`);
     const confirmation = await fetch(
       `${base}/pagamento-confermato.html?tipo=shop&ordine=demo`,
     );
@@ -36,6 +39,9 @@ const server = app.listen(0, "127.0.0.1", async () => {
       `${base}/api/payments/status/not-found`,
     );
     const results = {
+      area: area.status,
+      staff: staff.status,
+      terms: terms.status,
       checkout: checkout.status,
       confirmation: confirmation.status,
       modulistica: modulistica.status,
@@ -50,15 +56,18 @@ const server = app.listen(0, "127.0.0.1", async () => {
     console.log(results);
     if (
       results.checkout !== 200 ||
+      results.area !== 200 ||
+      results.staff !== 200 ||
+      results.terms !== 200 ||
       results.confirmation !== 200 ||
       results.modulistica !== 200 ||
       results.calendario !== 200 ||
       results.squadre !== 200 ||
       results.shop !== 200 ||
-      results.invalidPayment !== 400 ||
-      results.unsupportedProvider !== 400 ||
+      results.invalidPayment !== 403 ||
+      results.unsupportedProvider !== 403 ||
       results.stripeWebhook !== 503 ||
-      results.missingOrder !== 404
+      results.missingOrder !== 401
     )
       throw new Error("Smoke test non superato");
   } catch (error) {

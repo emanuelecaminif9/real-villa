@@ -1,55 +1,38 @@
-const params = new URLSearchParams(window.location.search);
-const orderId = params.get("ordine") || "";
-const type = params.get("tipo") === "shop" ? "shop" : "iscrizione";
-const message = document.getElementById("confirmationMessage");
-const next = document.getElementById("confirmationNext");
-const action = document.getElementById("confirmationAction");
-const formatPrice = (cents) =>
-  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(
-    cents / 100,
-  );
-
-if (type === "shop") {
-  message.textContent =
-    "Grazie per il tuo acquisto. Abbiamo ricevuto correttamente il pagamento dell’ordine.";
-  next.textContent =
-    "La società ti contatterà per concordare la consegna o il ritiro dei prodotti.";
-  action.href = "Shop.html";
-  action.textContent = "Torna allo shop";
-  localStorage.removeItem("real-villa-cart");
-} else {
-  message.textContent =
-    "Grazie. Il pagamento e la richiesta di iscrizione sono stati registrati correttamente.";
-  next.textContent =
-    "La società ti contatterà per completare i passaggi amministrativi dell’iscrizione.";
-}
-
-if (orderId) document.getElementById("confirmationOrder").textContent = orderId;
-
-async function loadConfirmation() {
-  if (!orderId) return;
-  try {
-    const response = await fetch(
-      `/api/payments/status/${encodeURIComponent(orderId)}`,
-      { cache: "no-store" },
-    );
-    if (!response.ok) return;
-    const order = await response.json();
-    if (!order.confirmed) {
-      document.getElementById("confirmationTitle").textContent =
-        "Pagamento in verifica.";
-      message.textContent =
-        "Il gestore sta ancora confermando la transazione. Non ripetere il pagamento.";
+(() => {
+  const orderId = new URLSearchParams(location.search).get('ordine');
+  const $ = id => document.getElementById(id);
+  let tries = 0;
+  async function load() {
+    if (!orderId) {
+      $('confirmationTitle').textContent = 'Nessun pagamento verificabile.';
+      $('confirmationMessage').textContent = 'Questa pagina da sola non dimostra un pagamento. Accedi a I miei pagamenti o contatta la segreteria.';
       return;
     }
-    document.getElementById("confirmationAmount").textContent = formatPrice(
-      order.amount,
-    );
-    document.getElementById("confirmationProvider").textContent =
-      order.provider === "paypal" ? "PayPal" : "Carta · Stripe";
-  } catch {
-    // La conferma resta valida anche se il riepilogo non è momentaneamente disponibile.
+    $('confirmationOrder').textContent = orderId;
+    try {
+      const response = await fetch('/api/payments/status/' + encodeURIComponent(orderId), { cache: 'no-store' });
+      if (response.status === 401) throw new Error('Accedi con la tua email per verificare l’esito e scaricare le ricevute.');
+      if (!response.ok) throw new Error('Esito non disponibile al momento. Non pagare di nuovo: controlla I miei pagamenti o contatta la segreteria.');
+      const order = await response.json();
+      if (!order.confirmed) {
+        $('confirmationTitle').textContent = 'Pagamento in verifica.';
+        $('confirmationMessage').textContent = 'Non abbiamo ancora una conferma dell’incasso. Non ripetere il pagamento.';
+        if (++tries < 6) setTimeout(load, 5000);
+        return;
+      }
+      $('confirmationIcon').textContent = '✓'; $('confirmationLabel').textContent = 'Pagamento ricevuto';
+      $('confirmationTitle').textContent = 'Pagamento confermato.';
+      $('confirmationMessage').textContent = order.setupPending ? 'Il pagamento è ricevuto. Stiamo verificando la scadenza dell’abbonamento: non effettuare un secondo pagamento.' : 'Il pagamento risulta completato. Puoi consultare il documento nell’area personale.';
+      $('confirmationAmount').textContent = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(order.amount / 100);
+      $('confirmationProvider').textContent = order.provider === 'stripe' ? 'Carta · Stripe' : 'PayPal';
+      $('confirmationNext').textContent = order.context === 'shop' ? 'La società ti contatterà per il ritiro o la consegna.' : 'L’iscrizione sportiva richiede anche il completamento della modulistica e dei passaggi amministrativi.';
+      try {
+        sessionStorage.removeItem(order.context === 'shop' ? 'rv-shop-attempt' : 'rv-registration-attempt');
+        if (order.context === 'shop') localStorage.removeItem('real-villa-cart');
+      } catch {}
+    } catch (error) {
+      $('confirmationTitle').textContent = 'Verifica il tuo pagamento.'; $('confirmationMessage').textContent = error.message;
+    }
   }
-}
-
-loadConfirmation();
+  load();
+})();

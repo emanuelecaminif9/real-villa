@@ -6,8 +6,9 @@
     <title>Completa l'iscrizione | Real Villa</title>
     <link rel="icon" href="logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="pagamenti-area.css" />
   </head>
-  <body>
+  <body class="billing-page">
     <header class="header">
       <a href="index.html"
         ><img class="header-logo" src="logo.svg" alt="Real Villa"
@@ -50,22 +51,22 @@
             <span class="eyebrow">Real Villa</span>
             <h2>Un passo dalla squadra.</h2>
             <p>
-              I dati vengono utilizzati esclusivamente per gestire la richiesta
-              e il pagamento dell’iscrizione.
+              Verifica la tua email, leggi le condizioni e completa il pagamento sul sito sicuro di Stripe.
             </p>
             <div class="subscription-summary">
               <div>
-                <span>Oggi</span><strong>€50,00</strong
-                ><small>Prima iscrizione</small>
+                <span>Prima mensilità</span><strong id="monthlyAmount">—</strong><small>Nessuna quota aggiuntiva automatica</small>
               </div>
               <div>
-                <span>Dal mese successivo</span><strong>€50,00/mese</strong
-                ><small>Abbonamento disdettabile</small>
+                <span>Fine stagione</span><strong id="seasonEnd">Da configurare</strong><small>Rinnovi con scadenza programmata</small>
               </div>
             </div>
           </aside>
           <div class="payment-box">
+            <p id="registrationAccess" class="billing-note">Verifica dell’accesso…</p>
+            <p id="registrationConfig" class="billing-notice" role="status">Caricamento delle condizioni…</p>
             <form id="iscrizioneForm" class="payment-form">
+              <div><label for="data_nascita">Data di nascita dell’atleta</label><input id="data_nascita" name="data_nascita" type="date" required></div>
               <div>
                 <label for="nome_ragazzo">Nome e cognome atleta</label
                 ><input
@@ -103,38 +104,13 @@
                   <option value="dal-2017">Pulcini e oltre (dal 2016)</option>
                 </select>
               </div>
-              <fieldset class="registration-payment-choice">
-                <legend>Metodo di pagamento</legend>
-                <label
-                  ><input
-                    type="radio"
-                    name="provider"
-                    value="paypal"
-                    checked
-                  /><span
-                    ><strong>PayPal</strong
-                    ><small
-                      >Iscrizione e rinnovo mensile con PayPal</small
-                    ></span
-                  ></label
-                >
-                <label
-                  ><input type="radio" name="provider" value="stripe" /><span
-                    ><strong>Carta · Stripe</strong
-                    ><small>Pagamento sicuro e rinnovo mensile con Stripe</small></span
-                  ></label
-                >
-              </fieldset>
-              <p class="recurring-consent">
-                Proseguendo autorizzi il pagamento iniziale di 50 € e il
-                successivo addebito di 50 € ogni mese, fino alla disdetta.
-              </p>
+              <input type="hidden" name="provider" value="stripe">
+              <p class="billing-note">Carta · Stripe. Le nuove iscrizioni utilizzano il piano stagionale. Gli abbonamenti PayPal già attivi restano gestibili dal proprio account PayPal.</p>
+              <label class="billing-check"><input id="paymentConsent" type="checkbox" required><span>Dichiaro di essere il genitore/tutore dell’atleta e autorizzo gli addebiti descritti nelle <a class="billing-link" href="condizioni-pagamenti.html" target="_blank" rel="noopener">condizioni di pagamento</a>, inclusa la scadenza della stagione. Le esenzioni richiedono l’approvazione della società.</span></label>
               <p class="checkout-error" id="registrationError" role="alert" hidden></p>
-              <button type="submit" class="button">Conferma e procedi</button>
+              <button id="registrationSubmit" type="submit" class="button" disabled>Verifica configurazione…</button>
             </form>
-            <button type="button" id="gestisciAbbonamento" class="manage-btn">
-              Gestisci o disdici un abbonamento esistente
-            </button>
+            <a class="manage-btn" href="i-miei-pagamenti.html">I miei pagamenti · ricevute e abbonamenti</a>
           </div>
         </div>
       </section>
@@ -168,67 +144,7 @@
       <img class="transition-logo" src="transizione.webp" alt="" />
     </div>
     <script src="app.js"></script>
-    <script>
-      const form = document.getElementById("iscrizioneForm");
-      const registrationError = document.getElementById("registrationError");
-      const selectedCategory = new URLSearchParams(location.search).get("categoria");
-      if (["piccoli-campioni", "primi-calci", "dal-2017"].includes(selectedCategory))
-        form.elements.pacchetto.value = selectedCategory;
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const button = form.querySelector("button");
-        registrationError.hidden = true;
-        button.disabled = true;
-        button.textContent = "Caricamento…";
-        try {
-          const data = Object.fromEntries(new FormData(form).entries());
-          const provider = data.provider;
-          delete data.provider;
-          const res = await fetch("/api/payments/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              context: "registration",
-              provider,
-              registration: data,
-            }),
-          });
-          const result = await res.json();
-          if (!res.ok) throw new Error(result.error || "Errore nel pagamento");
-          if (result.url) location.href = result.url;
-        } catch (err) {
-          registrationError.textContent = err.message;
-          registrationError.hidden = false;
-          button.disabled = false;
-          button.textContent = "Conferma e procedi";
-        }
-      });
-      document
-        .getElementById("gestisciAbbonamento")
-        .addEventListener("click", async () => {
-          const email = prompt("Inserisci l'email usata per l'iscrizione:");
-          if (!email) return;
-          const telefono = prompt(
-            "Inserisci il numero di telefono usato per l'iscrizione:",
-          );
-          if (!telefono) return;
-          try {
-            if (
-              !confirm("Vuoi disdire l'abbonamento associato a questa email?")
-            )
-              return;
-            const res = await fetch("/api/subscriptions/cancel", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, telefono }),
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.error || "Errore");
-            alert(result.message || "Abbonamento disdetto correttamente");
-          } catch (err) {
-            alert(err.message);
-          }
-        });
-    </script>
+    <script src="billing-common.js"></script>
+    <script src="registration.js"></script>
   </body>
 </html>

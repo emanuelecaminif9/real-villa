@@ -1,5 +1,12 @@
 node_modules/
 .env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+backups/
+test-results/
 payments.db
 payments.db-shm
 payments.db-wal

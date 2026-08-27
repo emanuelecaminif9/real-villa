@@ -1,3 +1,8 @@
+const mainMenu = document.querySelector('.menu ul');
+if (mainMenu && !mainMenu.querySelector('a[href="i-miei-pagamenti.html"]')) {
+  const item = document.createElement('li'); const link = document.createElement('a');
+  link.href = 'i-miei-pagamenti.html'; link.textContent = 'I miei pagamenti'; item.append(link); mainMenu.append(item);
+}
 const toggle = document.querySelector(".hamburger");
 const closeMenu = () => {
   document.body.classList.remove("menu-open");

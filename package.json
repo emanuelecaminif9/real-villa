@@ -4,10 +4,13 @@
   "description": "Sito ASD Real Villa con shop, PayPal Business e Stripe",
   "main": "server.js",
   "scripts": {
-    "test": "node --check server.js && node --check payments.js && node --check public/app.js && node --check public/shop.js && node --check public/checkout.js && node --check public/conferma-pagamento.js && node scripts/smoke-test.js",
+    "test": "node scripts/test.js",
     "start": "node server.js",
     "setup:paypal": "node scripts/create-paypal-plan.js",
-    "setup:stripe": "node scripts/create-stripe-price.js"
+    "setup:stripe": "node scripts/create-stripe-price.js",
+    "check:billing": "node scripts/check-billing.js",
+    "backup:db": "node scripts/backup-db.js",
+    "setup:portal": "node scripts/setup-portal.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +19,7 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "nodemailer": "9.0.6",
     "stripe": "^22.4.0"
   },
   "engines": {
