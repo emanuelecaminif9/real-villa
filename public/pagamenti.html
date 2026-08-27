@@ -15,6 +15,9 @@
       <nav class="menu" id="main-menu" aria-label="Navigazione principale">
         <ul>
           <li><a href="index.html">Home</a></li>
+          <li><a href="Modulistica.html">Modulistica</a></li>
+          <li><a href="Calendario.html">Calendario</a></li>
+          <li><a href="Squadre.html">Squadre</a></li>
           <li><a href="lastoria.html">Società</a></li>
           <li><a href="Iscrizioni.html">Iscrizioni</a></li>
           <li><a href="Shop.html">Shop</a></li>
@@ -116,9 +119,9 @@
                   ></label
                 >
                 <label
-                  ><input type="radio" name="provider" value="nexi" /><span
-                    ><strong>Carta · Nexi</strong
-                    ><small>Pagamento sicuro e rinnovo automatico</small></span
+                  ><input type="radio" name="provider" value="stripe" /><span
+                    ><strong>Carta · Stripe</strong
+                    ><small>Pagamento sicuro e rinnovo mensile con Stripe</small></span
                   ></label
                 >
               </fieldset>
@@ -126,6 +129,7 @@
                 Proseguendo autorizzi il pagamento iniziale di 50 € e il
                 successivo addebito di 50 € ogni mese, fino alla disdetta.
               </p>
+              <p class="checkout-error" id="registrationError" role="alert" hidden></p>
               <button type="submit" class="button">Conferma e procedi</button>
             </form>
             <button type="button" id="gestisciAbbonamento" class="manage-btn">
@@ -166,9 +170,14 @@
     <script src="app.js"></script>
     <script>
       const form = document.getElementById("iscrizioneForm");
+      const registrationError = document.getElementById("registrationError");
+      const selectedCategory = new URLSearchParams(location.search).get("categoria");
+      if (["piccoli-campioni", "primi-calci", "dal-2017"].includes(selectedCategory))
+        form.elements.pacchetto.value = selectedCategory;
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const button = form.querySelector("button");
+        registrationError.hidden = true;
         button.disabled = true;
         button.textContent = "Caricamento…";
         try {
@@ -188,7 +197,8 @@
           if (!res.ok) throw new Error(result.error || "Errore nel pagamento");
           if (result.url) location.href = result.url;
         } catch (err) {
-          alert(err.message);
+          registrationError.textContent = err.message;
+          registrationError.hidden = false;
           button.disabled = false;
           button.textContent = "Conferma e procedi";
         }

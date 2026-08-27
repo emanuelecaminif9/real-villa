@@ -51,7 +51,7 @@ const cartItems = document.getElementById("cartItems");
 const cartEmpty = document.getElementById("cartEmpty");
 const cartCount = document.getElementById("cartCount");
 const cartTotal = document.getElementById("cartTotal");
-const checkoutButtons = [...document.querySelectorAll(".checkout-button")];
+const checkoutButton = document.getElementById("goToCheckout");
 const formatPrice = (cents) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(
     cents / 100,
@@ -90,9 +90,7 @@ function renderCart() {
   cartCount.textContent = quantity;
   cartTotal.textContent = formatPrice(total);
   cartEmpty.hidden = cart.length > 0;
-  checkoutButtons.forEach((button) => {
-    button.disabled = cart.length === 0;
-  });
+  checkoutButton.setAttribute("aria-disabled", String(cart.length === 0));
 
   cart.forEach((item, index) => {
     const product = SHOP_PRODUCTS[item.id];
@@ -149,35 +147,8 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeCart();
 });
 
-checkoutButtons.forEach((button) =>
-  button.addEventListener("click", async () => {
-    const originalText = button.textContent;
-    checkoutButtons.forEach((item) => {
-      item.disabled = true;
-    });
-    button.textContent = "Preparazione pagamento…";
-    try {
-      const response = await fetch("/api/payments/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          context: "shop",
-          provider: button.dataset.provider,
-          items: cart,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Impossibile avviare il pagamento");
-      window.location.href = result.url;
-    } catch (error) {
-      alert(error.message);
-      checkoutButtons.forEach((item) => {
-        item.disabled = cart.length === 0;
-      });
-      button.textContent = originalText;
-    }
-  }),
-);
+checkoutButton.addEventListener("click", (event) => {
+  if (!cart.length) event.preventDefault();
+});
 
 renderCart();

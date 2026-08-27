@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Checkout shop | Real Villa</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="header checkout-header">
+      <a href="index.html"
+        ><img class="header-logo" src="logo.svg" alt="Real Villa"
+      /></a>
+      <div class="secure-checkout-label" aria-label="Checkout protetto">
+        <span aria-hidden="true">●</span> Checkout sicuro
+      </div>
+      <a class="checkout-back" href="Shop.html">Torna allo shop</a>
+    </header>
+    <main class="checkout-main">
+      <div class="container">
+        <div class="checkout-intro">
+          <div>
+            <span class="eyebrow">Ultimo passaggio</span>
+            <h1>Completa il tuo ordine.</h1>
+          </div>
+          <ol class="checkout-steps" aria-label="Avanzamento checkout">
+            <li class="done">Carrello</li>
+            <li class="active" aria-current="step">Dati e pagamento</li>
+            <li>Conferma</li>
+          </ol>
+        </div>
+
+        <div class="checkout-layout">
+          <section class="checkout-panel" aria-labelledby="checkout-form-title">
+            <form id="checkoutForm" class="checkout-form">
+              <div class="checkout-section-head">
+                <span>01</span>
+                <div>
+                  <h2 id="checkout-form-title">I tuoi contatti</h2>
+                  <p>Serviranno alla società per confermare consegna o ritiro.</p>
+                </div>
+              </div>
+              <div class="checkout-fields">
+                <div class="field-full">
+                  <label for="nome">Nome e cognome</label>
+                  <input
+                    id="nome"
+                    name="nome"
+                    type="text"
+                    autocomplete="name"
+                    maxlength="120"
+                    required
+                  />
+                </div>
+                <div>
+                  <label for="email">Email</label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    maxlength="200"
+                    required
+                  />
+                </div>
+                <div>
+                  <label for="telefono">Telefono</label>
+                  <input
+                    id="telefono"
+                    name="telefono"
+                    type="tel"
+                    autocomplete="tel"
+                    maxlength="40"
+                    required
+                  />
+                </div>
+                <div class="field-full">
+                  <label for="note">Note per la società <small>(facoltative)</small></label>
+                  <textarea
+                    id="note"
+                    name="note"
+                    rows="3"
+                    maxlength="300"
+                    placeholder="Per esempio: preferisco il ritiro in sede"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="checkout-section-head payment-method-title">
+                <span>02</span>
+                <div>
+                  <h2>Scegli come pagare</h2>
+                  <p>Verrai trasferito sulla pagina protetta del gestore scelto.</p>
+                </div>
+              </div>
+              <fieldset class="checkout-payment-methods">
+                <legend class="sr-only">Metodo di pagamento</legend>
+                <label>
+                  <input type="radio" name="provider" value="paypal" checked />
+                  <span class="provider-mark paypal-mark">PayPal</span>
+                  <span><strong>PayPal</strong><small>Conto PayPal o metodi disponibili</small></span>
+                  <span class="radio-check" aria-hidden="true"></span>
+                </label>
+                <label>
+                  <input type="radio" name="provider" value="stripe" />
+                  <span class="provider-mark stripe-mark">Stripe</span>
+                  <span><strong>Carta di credito o debito</strong><small>Pagamento protetto da Stripe Checkout</small></span>
+                  <span class="radio-check" aria-hidden="true"></span>
+                </label>
+              </fieldset>
+
+              <p class="checkout-error" id="checkoutError" role="alert" hidden></p>
+              <button class="button checkout-submit" id="checkoutSubmit" type="submit">
+                Procedi al pagamento <span id="checkoutSubmitTotal"></span>
+              </button>
+              <p class="checkout-legal">
+                I dati della carta non transitano né vengono salvati sul sito Real Villa.
+              </p>
+            </form>
+          </section>
+
+          <aside class="order-panel" aria-labelledby="order-title">
+            <div class="order-panel-head">
+              <div>
+                <span class="eyebrow">Riepilogo</span>
+                <h2 id="order-title">Il tuo ordine</h2>
+              </div>
+              <a href="Shop.html">Modifica</a>
+            </div>
+            <div class="checkout-empty" id="checkoutEmpty" hidden>
+              <strong>Il carrello è vuoto.</strong>
+              <p>Aggiungi almeno un prodotto prima di continuare.</p>
+              <a class="button" href="Shop.html">Vai allo shop</a>
+            </div>
+            <div class="checkout-order-items" id="checkoutOrderItems"></div>
+            <div class="checkout-totals" id="checkoutTotals">
+              <div><span>Subtotale</span><strong id="checkoutSubtotal">€0,00</strong></div>
+              <div><span>Consegna</span><strong>Da concordare</strong></div>
+              <div class="checkout-grand-total"><span>Totale</span><strong id="checkoutTotal">€0,00</strong></div>
+            </div>
+            <div class="checkout-assurance">
+              <span aria-hidden="true">✓</span>
+              <p><strong>Pagamento protetto</strong><br />La transazione avviene sui sistemi PayPal o Stripe.</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </main>
+    <footer class="checkout-footer">
+      <div class="container">
+        <span>© 2026 ASD Real Villa</span>
+        <a href="mailto:realvillacalcio@gmail.com">Serve aiuto?</a>
+      </div>
+    </footer>
+    <script src="checkout.js"></script>
+  </body>
+</html>

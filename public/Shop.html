@@ -15,6 +15,9 @@
       <nav class="menu" id="main-menu" aria-label="Navigazione principale">
         <ul>
           <li><a href="index.html">Home</a></li>
+          <li><a href="Modulistica.html">Modulistica</a></li>
+          <li><a href="Calendario.html">Calendario</a></li>
+          <li><a href="Squadre.html">Squadre</a></li>
           <li><a href="lastoria.html">Società</a></li>
           <li><a href="Iscrizioni.html">Iscrizioni</a></li>
           <li><a href="Shop.html">Shop</a></li>
@@ -50,14 +53,36 @@
       </section>
       <section class="section">
         <div class="container">
+          <div class="shop-paths" aria-label="Scegli il tuo percorso nello shop">
+            <a class="shop-path shop-path-new" href="#nuovi-iscritti">
+              <span class="shop-path-number">01</span>
+              <span>
+                <small>Prima stagione con noi</small>
+                <strong>Nuovi iscritti</strong>
+                <em>Scopri i kit da cui iniziare</em>
+              </span>
+              <span class="shop-path-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="shop-path shop-path-existing" href="#gia-iscritti">
+              <span class="shop-path-number">02</span>
+              <span>
+                <small>Sei già della squadra</small>
+                <strong>Già iscritti</strong>
+                <em>Ricambi, taglie e articoli aggiuntivi</em>
+              </span>
+              <span class="shop-path-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+
+          <section class="shop-channel" id="nuovi-iscritti">
           <div class="shop-heading">
             <div>
-              <span class="eyebrow">Collezione ufficiale</span>
-              <h2>Scegli i prodotti Real Villa.</h2>
+              <span class="eyebrow">Percorso nuovi iscritti</span>
+              <h2>Inizia dai kit ufficiali.</h2>
             </div>
             <p>
-              Seleziona la taglia, aggiungi i prodotti al carrello e completa
-              l’ordine con pagamento sicuro.
+              Seleziona la taglia dei kit. La società confermerà quali articoli
+              sono necessari per la categoria scelta.
             </p>
           </div>
           <div class="product-grid">
@@ -122,6 +147,81 @@
                 </button>
               </div>
             </article>
+          </div>
+          </section>
+
+          <section class="shop-channel shop-channel-existing" id="gia-iscritti">
+            <div class="shop-heading">
+              <div>
+                <span class="eyebrow">Percorso già iscritti</span>
+                <h2>Completa o rinnova il corredo.</h2>
+              </div>
+              <p>
+                Acquista nuovamente un kit, sostituisci una taglia oppure scegli
+                gli accessori ufficiali Real Villa.
+              </p>
+            </div>
+            <div class="product-grid">
+              <article class="product-card" data-product-id="kit-gara">
+                <img
+                  src="prodotto-kit-gara.webp"
+                  alt="Kit gara ufficiale Real Villa"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div class="product-card-body">
+                  <span class="product-category">Divisa ufficiale</span>
+                  <div class="product-title-row">
+                    <h3>Kit gara</h3>
+                    <strong>€65,00</strong>
+                  </div>
+                  <p>Maglia, pantaloncini e calzettoni nei colori del club.</p>
+                  <label
+                    >Taglia
+                    <select class="product-size" aria-label="Taglia kit gara per già iscritti">
+                      <option value="XS">XS</option>
+                      <option value="S">S</option>
+                      <option value="M" selected>M</option>
+                      <option value="L">L</option>
+                      <option value="XL">XL</option>
+                      <option value="XXL">XXL</option>
+                    </select>
+                  </label>
+                  <button type="button" class="button add-to-cart">
+                    Aggiungi al carrello
+                  </button>
+                </div>
+              </article>
+              <article class="product-card" data-product-id="kit-allenamento">
+                <img
+                  src="prodotto-kit-allenamento.webp"
+                  alt="Kit allenamento ufficiale Real Villa"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div class="product-card-body">
+                  <span class="product-category">Allenamento</span>
+                  <div class="product-title-row">
+                    <h3>Kit allenamento</h3>
+                    <strong>€55,00</strong>
+                  </div>
+                  <p>Completo tecnico con maglia, pantaloncini, tuta e calzettoni.</p>
+                  <label
+                    >Taglia
+                    <select class="product-size" aria-label="Taglia kit allenamento per già iscritti">
+                      <option value="XS">XS</option>
+                      <option value="S">S</option>
+                      <option value="M" selected>M</option>
+                      <option value="L">L</option>
+                      <option value="XL">XL</option>
+                      <option value="XXL">XXL</option>
+                    </select>
+                  </label>
+                  <button type="button" class="button add-to-cart">
+                    Aggiungi al carrello
+                  </button>
+                </div>
+              </article>
             <article class="product-card" data-product-id="zaino">
               <img src="prodotto-zaino.webp" alt="Zaino ufficiale Real Villa" loading="lazy" decoding="async" />
               <div class="product-card-body">
@@ -168,10 +268,11 @@
               </div>
             </article>
           </div>
+          </section>
           <div class="shop-assurance">
             <div>
               <strong>Pagamento sicuro</strong
-              ><span>Checkout protetto tramite PayPal e Nexi</span>
+              ><span>Checkout protetto tramite PayPal e Stripe</span>
             </div>
             <div>
               <strong>Ordine semplice</strong
@@ -214,25 +315,19 @@
       <div class="cart-summary">
         <div><span>Totale</span><strong id="cartTotal">€0,00</strong></div>
         <div class="payment-choice">
-          <span>Scegli come pagare</span>
-          <button
-            type="button"
-            class="button checkout-button paypal-button"
-            data-provider="paypal"
+          <span>Pronto per completare?</span>
+          <a
+            class="button checkout-button"
+            id="goToCheckout"
+            href="checkout.html"
+            aria-disabled="true"
           >
-            Paga con PayPal
-          </button>
-          <button
-            type="button"
-            class="button checkout-button nexi-button"
-            data-provider="nexi"
-          >
-            Paga con carta · Nexi
-          </button>
+            Vai al checkout
+          </a>
         </div>
         <p>
-          Pagamento gestito in modo sicuro da PayPal o Nexi. Spedizione o ritiro
-          saranno concordati con la società.
+          Nel prossimo passaggio inserisci i contatti e scegli PayPal oppure
+          carta tramite Stripe.
         </p>
       </div>
     </aside>

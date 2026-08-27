@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Pagamento confermato | Real Villa</title>
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="confirmation-page">
+    <main class="confirmation-shell">
+      <a class="confirmation-brand" href="index.html">
+        <img src="logo.svg" alt="Real Villa" />
+        <span>ASD Real Villa</span>
+      </a>
+      <section class="confirmation-card" aria-labelledby="confirmationTitle">
+        <div class="confirmation-icon" aria-hidden="true">✓</div>
+        <span class="eyebrow">Pagamento ricevuto</span>
+        <h1 id="confirmationTitle">È tutto confermato.</h1>
+        <p id="confirmationMessage">
+          La transazione è stata completata correttamente.
+        </p>
+
+        <div class="confirmation-details" id="confirmationDetails">
+          <div>
+            <span>Riferimento</span>
+            <strong id="confirmationOrder">—</strong>
+          </div>
+          <div>
+            <span>Importo</span>
+            <strong id="confirmationAmount">—</strong>
+          </div>
+          <div>
+            <span>Metodo</span>
+            <strong id="confirmationProvider">—</strong>
+          </div>
+        </div>
+
+        <div class="confirmation-next">
+          <span aria-hidden="true">i</span>
+          <p id="confirmationNext">
+            Conserva il riferimento: la società potrà contattarti per i passaggi successivi.
+          </p>
+        </div>
+        <a class="button" id="confirmationAction" href="index.html">Torna alla home</a>
+        <a class="confirmation-help" href="mailto:realvillacalcio@gmail.com">
+          Hai bisogno di assistenza?
+        </a>
+      </section>
+    </main>
+    <script src="conferma-pagamento.js"></script>
+  </body>
+</html>

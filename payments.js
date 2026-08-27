@@ -1,5 +1,7 @@
+const express = require("express");
+const Stripe = require("stripe");
 const { DatabaseSync } = require("node:sqlite");
-const { randomUUID, createHash } = require("node:crypto");
+const { randomUUID } = require("node:crypto");
 const path = require("path");
 
 const baseUrl = (process.env.BASE_URL || "http://localhost:3000").replace(
@@ -43,18 +45,11 @@ const products = {
 };
 
 const now = () => new Date().toISOString();
-const addMonth = (date = new Date()) => {
-  const result = new Date(date);
-  result.setUTCMonth(result.getUTCMonth() + 1);
-  return result.toISOString();
-};
 const shortId = (prefix) =>
   `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(
     0,
     18,
   );
-const customerId = (email) =>
-  `RV${createHash("sha256").update(email).digest("hex").slice(0, 20)}`;
 
 function validateRegistration(data) {
   const fields = [
@@ -100,6 +95,23 @@ function validateCart(items) {
   });
 }
 
+function validateShopCustomer(data) {
+  const fields = ["nome", "email", "telefono"];
+  if (!data || fields.some((field) => !String(data[field] || "").trim()))
+    throw new Error("Compila i dati di contatto per l’ordine");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
+    throw new Error("Indirizzo email non valido");
+  const telefono = String(data.telefono).replace(/\D/g, "");
+  if (telefono.length < 8 || telefono.length > 15)
+    throw new Error("Numero di telefono non valido");
+  return {
+    nome: String(data.nome).trim().slice(0, 120),
+    email: String(data.email).trim().toLowerCase().slice(0, 200),
+    telefono: String(data.telefono).trim().slice(0, 40),
+    note: String(data.note || "").trim().slice(0, 300),
+  };
+}
+
 function saveOrder(order) {
   db.prepare(
     "INSERT INTO payment_orders (id,provider,context,status,payload,external_id,contract_id,created_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -122,18 +134,33 @@ function updateOrder(id, status, externalId = null) {
 }
 
 function saveSubscription({ provider, email, externalId, contractId }) {
+  const existing = db
+    .prepare("SELECT id FROM subscriptions WHERE provider=? AND external_id=?")
+    .get(provider, externalId);
+  if (existing) {
+    db.prepare(
+      "UPDATE subscriptions SET email=?, status='ACTIVE', contract_id=COALESCE(?,contract_id), next_charge_at=NULL WHERE id=?",
+    ).run(email.toLowerCase(), contractId || null, existing.id);
+    return;
+  }
   db.prepare(
-    "INSERT OR REPLACE INTO subscriptions (id,provider,email,status,external_id,contract_id,next_charge_at,created_at) VALUES (?,?,?,?,?,?,?,?)",
+    "INSERT INTO subscriptions (id,provider,email,status,external_id,contract_id,next_charge_at,created_at) VALUES (?,?,?,?,?,?,NULL,?)",
   ).run(
     randomUUID(),
     provider,
     email.toLowerCase(),
     "ACTIVE",
-    externalId || null,
+    externalId,
     contractId || null,
-    provider === "nexi" ? addMonth() : null,
     now(),
   );
+}
+
+function updateSubscriptionStatus(provider, externalId, status) {
+  if (!externalId) return;
+  db.prepare(
+    "UPDATE subscriptions SET status=? WHERE provider=? AND external_id=?",
+  ).run(status, provider, externalId);
 }
 
 const paypalBase = () =>
@@ -183,7 +210,7 @@ async function paypalRequest(endpoint, options = {}) {
   return data;
 }
 
-async function startPayPalShop(items) {
+async function startPayPalShop(items, customer) {
   const id = shortId("PPS");
   const total = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -197,6 +224,8 @@ async function startPayPalShop(items) {
       purchase_units: [
         {
           reference_id: id,
+          custom_id: id,
+          description: `Ordine shop di ${customer.nome}`,
           amount: {
             currency_code: "EUR",
             value: (total / 100).toFixed(2),
@@ -231,7 +260,7 @@ async function startPayPalShop(items) {
     provider: "paypal",
     context: "shop",
     status: "PENDING",
-    payload: items,
+    payload: { items, customer },
     externalId: order.id,
   });
   return order.links.find((link) => link.rel === "approve")?.href;
@@ -270,135 +299,225 @@ async function startPayPalRegistration(registration) {
   return subscription.links.find((link) => link.rel === "approve")?.href;
 }
 
-const nexiBase = () =>
-  process.env.NEXI_MODE === "live"
-    ? "https://xpay.nexigroup.com/api/phoenix-0.0/psp/api/v1"
-    : "https://xpaysandbox.nexigroup.com/api/phoenix-0.0/psp/api/v1";
-
-async function nexiRequest(endpoint, options = {}, idempotent = false) {
-  if (!process.env.NEXI_API_KEY)
-    throw new Error("Chiave Nexi XPay non configurata");
-  const headers = {
-    "X-Api-Key": process.env.NEXI_API_KEY,
-    "Correlation-Id": randomUUID(),
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-  if (idempotent) headers["Idempotency-Key"] = randomUUID();
-  const response = await fetch(`${nexiBase()}${endpoint}`, {
-    ...options,
-    headers,
-  });
-  const data = response.status === 204 ? {} : await response.json();
-  if (!response.ok)
-    throw new Error(
-      data.errors?.[0]?.description || "Operazione Nexi non riuscita",
-    );
-  return data;
+let stripeClient;
+let stripeClientKey;
+function getStripeClient() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("Chiave segreta Stripe non configurata");
+  if (!stripeClient || stripeClientKey !== key) {
+    stripeClient = new Stripe(key);
+    stripeClientKey = key;
+  }
+  return stripeClient;
 }
 
-async function startNexi({ context, payload, amount, recurring }) {
-  const id = shortId(context === "shop" ? "NXS" : "NXR");
-  const contractId = recurring ? shortId("RVC") : null;
-  const email = recurring ? payload.email : "";
-  const body = {
-    order: {
-      orderId: id,
-      amount: String(amount),
-      currency: "EUR",
-      customerId: recurring ? customerId(email) : undefined,
-      description: recurring
-        ? "Iscrizione ASD Real Villa"
-        : "Ordine shop ASD Real Villa",
+function stripeObjectId(value) {
+  if (typeof value === "string") return value;
+  return value?.id ? String(value.id) : "";
+}
+
+async function startStripeShop(items, customer) {
+  const id = shortId("STS");
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      locale: "it",
+      customer_email: customer.email,
+      client_reference_id: id,
+      metadata: { local_order_id: id, context: "shop" },
+      line_items: items.map((item) => ({
+        quantity: item.quantity,
+        price_data: {
+          currency: "eur",
+          unit_amount: item.price,
+          product_data: {
+            name: item.name,
+            description: `Taglia: ${item.size}`,
+          },
+        },
+      })),
+      payment_intent_data: {
+        metadata: { local_order_id: id, context: "shop" },
+      },
+      success_url: `${baseUrl}/stripe/complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/shop-cancel.html`,
     },
-    paymentSession: {
-      actionType: "PAY",
-      amount: String(amount),
-      recurrence: recurring
-        ? {
-            action: "CONTRACT_CREATION",
-            contractId,
-            contractType: "MIT_SCHEDULED",
-            contractFrequency: "30",
-          }
-        : { action: "NO_RECURRING" },
-    },
-    language: "ita",
-    resultUrl: `${baseUrl}/nexi/result/${id}`,
-    cancelUrl: `${baseUrl}/${context === "shop" ? "shop-cancel.html" : "cancel.html"}`,
-    notificationUrl: `${baseUrl}/nexi/notification`,
-  };
-  const result = await nexiRequest("/orders/hpp", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+    { idempotencyKey: id },
+  );
   saveOrder({
     id,
-    provider: "nexi",
-    context,
+    provider: "stripe",
+    context: "shop",
     status: "PENDING",
-    payload,
-    contractId,
+    payload: { items, customer },
+    externalId: session.id,
   });
-  return result.hostedPage;
+  return session.url;
 }
 
-function successfulNexiOrder(data) {
-  const operations = data.operations || data.order?.operations || [];
-  return operations.some((operation) =>
-    ["EXECUTED", "AUTHORIZED"].includes(operation.operationResult),
+async function startStripeRegistration(registration) {
+  if (!process.env.STRIPE_SUBSCRIPTION_PRICE_ID)
+    throw new Error("Piano mensile Stripe non configurato");
+  const id = shortId("STR");
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "subscription",
+      locale: "it",
+      customer_email: registration.email,
+      client_reference_id: id,
+      metadata: { local_order_id: id, context: "registration" },
+      line_items: [
+        { price: process.env.STRIPE_SUBSCRIPTION_PRICE_ID, quantity: 1 },
+      ],
+      subscription_data: {
+        metadata: { local_order_id: id, context: "registration" },
+      },
+      success_url: `${baseUrl}/stripe/complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/cancel.html`,
+    },
+    { idempotencyKey: id },
+  );
+  saveOrder({
+    id,
+    provider: "stripe",
+    context: "registration",
+    status: "PENDING",
+    payload: registration,
+    externalId: session.id,
+  });
+  return session.url;
+}
+
+function completeStripeCheckout(session) {
+  const localId = String(
+    session.metadata?.local_order_id || session.client_reference_id || "",
+  );
+  const order = localId
+    ? db
+        .prepare("SELECT * FROM payment_orders WHERE id=? AND provider='stripe'")
+        .get(localId)
+    : db
+        .prepare(
+          "SELECT * FROM payment_orders WHERE external_id=? AND provider='stripe'",
+        )
+        .get(session.id);
+  if (!order) throw new Error("Ordine Stripe non trovato");
+  if (session.payment_status !== "paid")
+    throw new Error("Pagamento Stripe non ancora completato");
+
+  if (order.status !== "PAID") updateOrder(order.id, "PAID", session.id);
+  if (order.context === "registration") {
+    const subscriptionId = stripeObjectId(session.subscription);
+    if (!subscriptionId)
+      throw new Error("Abbonamento Stripe non disponibile");
+    const registration = JSON.parse(order.payload);
+    saveSubscription({
+      provider: "stripe",
+      email: registration.email,
+      externalId: subscriptionId,
+      contractId: order.id,
+    });
+  }
+  return order;
+}
+
+function stripeSubscriptionIdFromInvoice(invoice) {
+  return (
+    stripeObjectId(invoice.subscription) ||
+    stripeObjectId(invoice.parent?.subscription_details?.subscription)
   );
 }
 
-async function chargeDueNexiSubscriptions() {
-  const due = db
-    .prepare(
-      "SELECT * FROM subscriptions WHERE provider='nexi' AND status='ACTIVE' AND next_charge_at<=?",
+async function processStripeEvent(event) {
+  if (
+    ["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(
+      event.type,
     )
-    .all(now());
-  for (const subscription of due) {
-    const orderId = shortId("NXM");
-    try {
-      const result = await nexiRequest(
-        "/orders/mit",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            order: {
-              orderId,
-              amount: "5000",
-              currency: "EUR",
-              customerId: customerId(subscription.email),
-              description: "Quota mensile ASD Real Villa",
-            },
-            contractId: subscription.contract_id,
-          }),
-        },
-        true,
-      );
-      const ok = ["EXECUTED", "AUTHORIZED"].includes(
-        result.operation?.operationResult,
-      );
-      db.prepare(
-        "UPDATE subscriptions SET status=?, next_charge_at=? WHERE id=?",
-      ).run(
-        ok ? "ACTIVE" : "PAYMENT_FAILED",
-        ok
-          ? addMonth(subscription.next_charge_at)
-          : subscription.next_charge_at,
-        subscription.id,
-      );
-    } catch (error) {
-      console.error(
-        "Addebito Nexi non riuscito:",
-        subscription.id,
-        error.message,
-      );
-      db.prepare(
-        "UPDATE subscriptions SET status='PAYMENT_FAILED' WHERE id=?",
-      ).run(subscription.id);
-    }
+  ) {
+    const session = event.data.object;
+    if (session.payment_status === "paid") completeStripeCheckout(session);
+    return;
   }
+
+  if (event.type.startsWith("customer.subscription.")) {
+    const subscription = event.data.object;
+    const statuses = {
+      active: "ACTIVE",
+      trialing: "ACTIVE",
+      past_due: "PAYMENT_FAILED",
+      unpaid: "PAYMENT_FAILED",
+      incomplete: "PAYMENT_FAILED",
+      incomplete_expired: "EXPIRED",
+      paused: "SUSPENDED",
+      canceled: "CANCELED",
+    };
+    updateSubscriptionStatus(
+      "stripe",
+      subscription.id,
+      statuses[subscription.status] || String(subscription.status).toUpperCase(),
+    );
+    return;
+  }
+
+  if (["invoice.payment_failed", "invoice.payment_succeeded"].includes(event.type)) {
+    const subscriptionId = stripeSubscriptionIdFromInvoice(event.data.object);
+    updateSubscriptionStatus(
+      "stripe",
+      subscriptionId,
+      event.type === "invoice.payment_succeeded" ? "ACTIVE" : "PAYMENT_FAILED",
+    );
+  }
+}
+
+function installStripeWebhookRoute(app) {
+  app.post(
+    "/stripe/webhook",
+    express.raw({ type: "application/json", limit: "300kb" }),
+    async (req, res) => {
+      try {
+        if (!process.env.STRIPE_WEBHOOK_SECRET)
+          return res.status(503).json({ error: "Webhook Stripe non configurato" });
+        const signature = req.get("stripe-signature");
+        if (!signature) return res.sendStatus(400);
+        const event = getStripeClient().webhooks.constructEvent(
+          req.body,
+          signature,
+          process.env.STRIPE_WEBHOOK_SECRET,
+        );
+        await processStripeEvent(event);
+        res.sendStatus(200);
+      } catch (error) {
+        console.error("Webhook Stripe non elaborato:", error.message);
+        res.sendStatus(400);
+      }
+    },
+  );
+}
+
+function getOrderPublicSummary(order) {
+  const payload = JSON.parse(order.payload);
+  const items =
+    order.context === "shop"
+      ? Array.isArray(payload)
+        ? payload
+        : payload.items || []
+      : [];
+  const amount =
+    order.context === "registration"
+      ? 5000
+      : items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  return {
+    id: order.id,
+    context: order.context,
+    provider: order.provider,
+    status: order.status,
+    confirmed: ["PAID", "APPROVED"].includes(order.status),
+    amount,
+    itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+    createdAt: order.created_at,
+  };
 }
 
 function installPaymentRoutes(app) {
@@ -407,36 +526,24 @@ function installPaymentRoutes(app) {
       const { context, provider } = req.body;
       if (
         !["shop", "registration"].includes(context) ||
-        !["paypal", "nexi"].includes(provider)
+        !["paypal", "stripe"].includes(provider)
       )
         throw new Error("Metodo di pagamento non valido");
+
       let url;
       if (context === "shop") {
         const items = validateCart(req.body.items);
-        const total = items.reduce(
-          (sum, item) => sum + item.price * item.quantity,
-          0,
-        );
+        const customer = validateShopCustomer(req.body.customer);
         url =
           provider === "paypal"
-            ? await startPayPalShop(items)
-            : await startNexi({
-                context,
-                payload: items,
-                amount: total,
-                recurring: false,
-              });
+            ? await startPayPalShop(items, customer)
+            : await startStripeShop(items, customer);
       } else {
         const registration = validateRegistration(req.body.registration);
         url =
           provider === "paypal"
             ? await startPayPalRegistration(registration)
-            : await startNexi({
-                context,
-                payload: registration,
-                amount: 5000,
-                recurring: true,
-              });
+            : await startStripeRegistration(registration);
       }
       if (!url)
         throw new Error("Il gestore non ha restituito la pagina di pagamento");
@@ -453,19 +560,23 @@ function installPaymentRoutes(app) {
       const token = String(req.query.token || "");
       const order = db
         .prepare(
-          "SELECT id FROM payment_orders WHERE external_id=? AND context='shop'",
+          "SELECT * FROM payment_orders WHERE external_id=? AND context='shop' AND provider='paypal'",
         )
         .get(token);
       if (!order) throw new Error("Ordine non trovato");
-      await paypalRequest(
-        `/v2/checkout/orders/${encodeURIComponent(token)}/capture`,
-        {
-          method: "POST",
-          headers: { "PayPal-Request-Id": `${order.id}-capture` },
-        },
+      if (order.status !== "PAID") {
+        await paypalRequest(
+          `/v2/checkout/orders/${encodeURIComponent(token)}/capture`,
+          {
+            method: "POST",
+            headers: { "PayPal-Request-Id": `${order.id}-capture` },
+          },
+        );
+        updateOrder(order.id, "PAID");
+      }
+      res.redirect(
+        `/pagamento-confermato.html?tipo=shop&ordine=${encodeURIComponent(order.id)}`,
       );
-      updateOrder(order.id, "PAID");
-      res.redirect("/shop-success.html");
     } catch (error) {
       res.redirect("/shop-cancel.html");
     }
@@ -475,11 +586,15 @@ function installPaymentRoutes(app) {
     const local = String(req.query.local || "");
     const order = db
       .prepare(
-        "SELECT * FROM payment_orders WHERE id=? AND context='registration'",
+        "SELECT * FROM payment_orders WHERE id=? AND context='registration' AND provider='paypal'",
       )
       .get(local);
     try {
       if (!order) throw new Error("Iscrizione non trovata");
+      if (["PAID", "APPROVED"].includes(order.status))
+        return res.redirect(
+          `/pagamento-confermato.html?tipo=iscrizione&ordine=${encodeURIComponent(order.id)}`,
+        );
       const subscription = await paypalRequest(
         `/v1/billing/subscriptions/${encodeURIComponent(order.external_id)}`,
         { method: "GET" },
@@ -493,45 +608,88 @@ function installPaymentRoutes(app) {
         email: registration.email,
         externalId: order.external_id,
       });
-      res.redirect("/success.html");
+      res.redirect(
+        `/pagamento-confermato.html?tipo=iscrizione&ordine=${encodeURIComponent(order.id)}`,
+      );
     } catch (error) {
       res.redirect("/cancel.html");
     }
   });
 
-  app.get("/nexi/result/:orderId", async (req, res) => {
-    const order = db
-      .prepare("SELECT * FROM payment_orders WHERE id=? AND provider='nexi'")
-      .get(req.params.orderId);
-    if (!order) return res.redirect("/cancel.html");
+  app.get("/stripe/complete", async (req, res) => {
     try {
-      const result = await nexiRequest(
-        `/orders/${encodeURIComponent(order.id)}`,
-        { method: "GET" },
+      const sessionId = String(req.query.session_id || "");
+      if (!sessionId) throw new Error("Sessione Stripe mancante");
+      const session = await getStripeClient().checkout.sessions.retrieve(
+        sessionId,
+        { expand: ["subscription"] },
       );
-      if (!successfulNexiOrder(result))
-        throw new Error("Pagamento non completato");
-      updateOrder(order.id, "PAID");
-      if (order.context === "registration") {
-        const registration = JSON.parse(order.payload);
-        saveSubscription({
-          provider: "nexi",
-          email: registration.email,
-          contractId: order.contract_id,
-        });
-      }
+      const order = completeStripeCheckout(session);
       res.redirect(
-        order.context === "shop" ? "/shop-success.html" : "/success.html",
+        `/pagamento-confermato.html?tipo=${order.context === "shop" ? "shop" : "iscrizione"}&ordine=${encodeURIComponent(order.id)}`,
       );
     } catch (error) {
-      res.redirect(
-        order.context === "shop" ? "/shop-cancel.html" : "/cancel.html",
-      );
+      console.error("Ritorno Stripe non elaborato:", error.message);
+      const order = db
+        .prepare(
+          "SELECT context FROM payment_orders WHERE external_id=? AND provider='stripe'",
+        )
+        .get(String(req.query.session_id || ""));
+      res.redirect(order?.context === "shop" ? "/shop-cancel.html" : "/cancel.html");
     }
   });
 
-  app.post("/nexi/notification", (req, res) => {
-    res.sendStatus(200);
+  app.post("/paypal/webhook", async (req, res) => {
+    try {
+      if (!process.env.PAYPAL_WEBHOOK_ID)
+        return res.status(503).json({ error: "Webhook PayPal non configurato" });
+      const verification = await paypalRequest(
+        "/v1/notifications/verify-webhook-signature",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            auth_algo: req.get("paypal-auth-algo"),
+            cert_url: req.get("paypal-cert-url"),
+            transmission_id: req.get("paypal-transmission-id"),
+            transmission_sig: req.get("paypal-transmission-sig"),
+            transmission_time: req.get("paypal-transmission-time"),
+            webhook_id: process.env.PAYPAL_WEBHOOK_ID,
+            webhook_event: req.body,
+          }),
+        },
+      );
+      if (verification.verification_status !== "SUCCESS")
+        return res.sendStatus(403);
+
+      const eventType = String(req.body?.event_type || "");
+      const externalId = String(
+        req.body?.resource?.billing_agreement_id ||
+          req.body?.resource?.id ||
+          "",
+      );
+      const statuses = {
+        "BILLING.SUBSCRIPTION.ACTIVATED": "ACTIVE",
+        "BILLING.SUBSCRIPTION.CANCELLED": "CANCELED",
+        "BILLING.SUBSCRIPTION.SUSPENDED": "SUSPENDED",
+        "BILLING.SUBSCRIPTION.EXPIRED": "EXPIRED",
+        "BILLING.SUBSCRIPTION.PAYMENT.FAILED": "PAYMENT_FAILED",
+      };
+      if (externalId && statuses[eventType])
+        updateSubscriptionStatus("paypal", externalId, statuses[eventType]);
+      res.sendStatus(200);
+    } catch (error) {
+      console.error("Webhook PayPal non elaborato:", error.message);
+      res.sendStatus(400);
+    }
+  });
+
+  app.get("/api/payments/status/:orderId", (req, res) => {
+    const order = db
+      .prepare("SELECT * FROM payment_orders WHERE id=?")
+      .get(String(req.params.orderId || ""));
+    if (!order) return res.status(404).json({ error: "Ordine non trovato" });
+    res.set("Cache-Control", "no-store");
+    res.json(getOrderPublicSummary(order));
   });
 
   app.post("/api/subscriptions/cancel", async (req, res) => {
@@ -546,21 +704,22 @@ function installPaymentRoutes(app) {
           .json({ error: "Numero di telefono obbligatorio" });
       const subscription = db
         .prepare(
-          "SELECT * FROM subscriptions WHERE email=? AND status IN ('ACTIVE','PAYMENT_FAILED') ORDER BY created_at DESC",
+          "SELECT * FROM subscriptions WHERE email=? AND provider IN ('paypal','stripe') AND status IN ('ACTIVE','PAYMENT_FAILED') ORDER BY created_at DESC",
         )
         .get(email);
       if (!subscription)
         return res.status(404).json({ error: "Nessun abbonamento trovato" });
+
       const paymentOrder =
         subscription.provider === "paypal"
           ? db
               .prepare(
-                "SELECT payload FROM payment_orders WHERE external_id=? AND context='registration'",
+                "SELECT payload FROM payment_orders WHERE external_id=? AND context='registration' AND provider='paypal'",
               )
               .get(subscription.external_id)
           : db
               .prepare(
-                "SELECT payload FROM payment_orders WHERE contract_id=? AND context='registration'",
+                "SELECT payload FROM payment_orders WHERE id=? AND context='registration' AND provider='stripe'",
               )
               .get(subscription.contract_id);
       const registeredPhone = paymentOrder
@@ -573,6 +732,7 @@ function installPaymentRoutes(app) {
         return res
           .status(403)
           .json({ error: "I dati inseriti non corrispondono all’abbonamento" });
+
       if (subscription.provider === "paypal")
         await paypalRequest(
           `/v1/billing/subscriptions/${encodeURIComponent(subscription.external_id)}/cancel`,
@@ -581,11 +741,8 @@ function installPaymentRoutes(app) {
             body: JSON.stringify({ reason: "Richiesta del cliente" }),
           },
         );
-      else
-        await nexiRequest(
-          `/contracts/${encodeURIComponent(subscription.contract_id)}/deactivation`,
-          { method: "POST" },
-        );
+      else await getStripeClient().subscriptions.cancel(subscription.external_id);
+
       db.prepare("UPDATE subscriptions SET status='CANCELED' WHERE id=?").run(
         subscription.id,
       );
@@ -594,9 +751,6 @@ function installPaymentRoutes(app) {
       res.status(400).json({ error: error.message || "Disdetta non riuscita" });
     }
   });
-
-  setTimeout(chargeDueNexiSubscriptions, 15000);
-  setInterval(chargeDueNexiSubscriptions, 6 * 60 * 60 * 1000);
 }
 
-module.exports = { installPaymentRoutes };
+module.exports = { installPaymentRoutes, installStripeWebhookRoute };

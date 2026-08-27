@@ -28,6 +28,10 @@ document.querySelectorAll(".menu a").forEach((a) => {
 document.querySelectorAll("a[href]").forEach((link) =>
   link.addEventListener("click", (e) => {
     const href = link.getAttribute("href");
+    if (link.getAttribute("aria-disabled") === "true") {
+      e.preventDefault();
+      return;
+    }
     if (
       !href ||
       href.startsWith("#") ||
