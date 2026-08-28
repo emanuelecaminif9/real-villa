@@ -7,10 +7,10 @@ const { openDatabase } = require('../database');
 const { createStripeBilling } = require('../stripe-billing');
 const { fakeStripe } = require('./fake-stripe');
 
-async function setup(t) {
+async function setup(t, { mailFailure = false } = {}) {
   const db = openDatabase(':memory:'); const fake = fakeStripe(Date.now); const mailbox = [];
   const env = { STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fake', STRIPE_WEBHOOK_SECRET: 'whsec_fake', AUTH_SECRET: 'test-only-private-secret-'.repeat(4), ADMIN_EMAILS: 'staff@example.test', STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test' };
-  const billing = createStripeBilling({ db, env, stripe: fake.api, sendMail: async mail => { mailbox.push(mail); } });
+  const billing = createStripeBilling({ db, env, stripe: fake.api, sendMail: async mail => { mailbox.push(mail); if (mailFailure) throw new Error('private-provider-error'); } });
   const app = express(); billing.installWebhook(app); app.use(express.json()); billing.installRoutes(app);
   const server = app.listen(0, '127.0.0.1'); await once(server, 'listening'); env.BASE_URL = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); db.close(); });
@@ -58,6 +58,16 @@ test('email code requests are rate limited per email', async t => {
   const f = await setup(t);
   for (let i = 0; i < 3; i++) assert.equal((await f.request('/api/account/request-code', { email: 'parent@example.test' })).status, 200);
   assert.equal((await f.request('/api/account/request-code', { email: 'parent@example.test' })).status, 429);
+});
+test('failed email delivery consumes its code and never grants access or leaks provider details', async t => {
+  const f = await setup(t, { mailFailure: true });
+  const result = await f.request('/api/account/request-code', { email: 'parent@example.test' });
+  assert.equal(result.status, 503); assert.equal(result.data.challenge, undefined);
+  assert.doesNotMatch(JSON.stringify(result.data), /private-provider-error|\b\d{8}\b/);
+  const row = f.db.prepare('SELECT * FROM rv_challenges').get(); assert.equal(row.consumed, 1);
+  const code = f.mailbox[0].text.match(/\b\d{8}\b/)[0];
+  assert.equal((await f.request('/api/account/verify-code', { challenge: row.id, code })).status, 401);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM rv_sessions').get().n, 0);
 });
 test('verified parent cannot read another customer’s payments or open their portal', async t => {
   const f = await setup(t); const auth = await f.login(); f.fake.state.customers.set('cus_other', { id: 'cus_other', livemode: false, email: 'other@example.test' });

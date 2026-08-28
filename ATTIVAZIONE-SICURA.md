@@ -14,13 +14,19 @@ Questa versione è preparata per il collaudo, non è un’autorizzazione a passa
 - Protezioni contro i doppi invii, importi non coerenti, notifiche duplicate e accesso ai dati di altri clienti.
 - Conferma del pagamento basata sull’esito verificato, mai sulla sola apertura di una pagina.
 
-## Prima decisione: condizioni della stagione
+## Regole della stagione e limiti dell’attivazione
 
-Occorre l’approvazione scritta della società per data di fine stagione, giorno di addebito, importo e trattamento dei mesi parziali.
+La regola comunicata è: iscrizione una tantum 50 euro; mensilità intera 50 euro da settembre a maggio; rinnovi il giorno 8. Un ingresso il 20 settembre comporta 100 euro subito (50 iscrizione + 50 settembre), poi 50 euro ogni 8 da ottobre a maggio. Totale di una stagione intera: 500 euro, inclusa l’iscrizione, prima di eventuali esenzioni.
 
-La modalità implementata mantiene il giorno dell’iscrizione come giorno mensile di rinnovo. La prima mensilità è intera; l’ultimo periodo può essere riproporzionato da Stripe alla fine della stagione. Una data futura di cancellazione fuori dal periodo corrente può comportare un ultimo importo proporzionale: non è corretto promettere rate tutte intere senza un’altra configurazione.
+Il codice applica il pagamento intero del mese d’ingresso anche a chi entra prima dell’8: quel mese non viene addebitato una seconda volta. In caso di ingresso a maggio il pagamento è una tantum di 100 euro e non viene creato un abbonamento senza rinnovi. Non vengono recuperate automaticamente mensilità anteriori all’ingresso.
 
-Se invece i soci scelgono il primo giorno di ogni mese, un numero fisso di rate tutte uguali o una quota iniziale distinta, NON attivare questa configurazione: serve prima adattare e collaudare quella regola. Le date rimangono volutamente vuote nel modello.
+La società ha confermato che le iscrizioni partono da settembre: apertura il 1° settembre 2026 alle 00:00, ora italiana. Non si incassano iscrizioni anticipate ad agosto. Il server blocca i nuovi checkout d’iscrizione prima dell’apertura; il vecchio flag `PRESEASON_REGISTRATION_ENABLED` non è più utilizzato e non può anticiparla. Il blocco vale anche in Sandbox: i test automatici usano date simulate senza cambiare l’orologio del sito online.
+
+Le nuove sottoscrizioni utilizzano un differimento Stripe (`trial_end`) soltanto per la componente ricorrente. Iscrizione ed eventuale mese corrente sono voci una tantum, da pagare subito. Nel pannello Stripe può comparire “trial / prova”: non significa che la mensilità iniziale sia gratuita. La carta viene comunque richiesta nel Checkout.
+
+Per incassare integralmente maggio senza una rata di giugno, la cancellazione Stripe è programmata sul confine del periodo successivo, l’8 giugno, allo stesso orario UTC del rinnovo. L’ultima nuova mensilità è quella dell’8 maggio; l’8 giugno non deve essere emessa un’ulteriore rata. Le nuove iscrizioni chiudono alla fine del 31 maggio, ora italiana. Non cambiare la cancellazione al 31 maggio: accorciare in anticipo un periodo Stripe futuro può causare un importo proporzionale.
+
+Il calendario è un limite alle nuove mensilità, non un annullamento di eventuali fatture precedenti non saldate. Sospensioni e disdette anticipate possono ridurre le rate previste e non estendono la stagione. Gli abbonamenti già esistenti mantengono le proprie regole: non è stata eseguita alcuna migrazione automatica.
 
 Le condizioni della pagina «Mensilità e pagamenti» sono una base operativa da approvare con la società e il consulente. Integrare prima degli incassi i dati legali completi, l’informativa privacy per i dati raccolti, le condizioni contrattuali e le regole di recesso/rimborso applicabili. Il codice non certifica la conformità legale o fiscale.
 
@@ -48,7 +54,9 @@ Se l’archivio precedente è già andato perso, fermare la migrazione e riconci
 In Render → Environment impostare i campi del file `.env.example` senza pubblicare segreti nel repository:
 
 - `AUTH_SECRET`: valore casuale di almeno 48 caratteri, da un password manager. Conservarlo stabile; cambiarlo disconnette le sessioni e invalida i codici pendenti.
-- `SMTP_HOST`, `SMTP_PORT` (465 o 587), `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`: dati del servizio email della società. TLS obbligatorio; nessuna opzione per disabilitare la verifica dei certificati.
+- Su Render Free: `MAIL_PROVIDER=resend`, `RESEND_API_KEY` e `MAIL_FROM`. L’invio avviene via HTTPS e mantiene la verifica del codice monouso. Occorre creare/configurare il proprio account Resend; nessuna email è stata inviata durante lo sviluppo.
+- Per prove senza un dominio verificato, Resend permette `MAIL_FROM=Real Villa <onboarding@resend.dev>` soltanto verso l’indirizzo dell’account Resend. Per altri destinatari e per il live occorre un dominio mittente verificato; il mittente `resend.dev` viene rifiutato dal codice in modalità live.
+- In alternativa, su un server che consente SMTP: `MAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT` (465 o 587), `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`. TLS obbligatorio. Render Free blocca le porte SMTP: inserire le credenziali SMTP su quel piano non basta.
 - `ADMIN_EMAILS`: email del personale autorizzato, separate da virgola. Non è una lista pubblica.
 
 Verificare mittente autorizzato e impostazioni SPF/DKIM/DMARC con il fornitore email, recapito e cartella spam. I codici di accesso scadono dopo 10 minuti, sono monouso e ammettono al massimo 5 tentativi. Le sessioni durano 8 ore. Non condividere codici; proteggere anche le caselle email del personale con autenticazione a due fattori.
@@ -63,8 +71,10 @@ Mantenere `STRIPE_MODE=test` e `LIVE_PAYMENTS_ENABLED=false`.
 - `STRIPE_SECRET_KEY`: chiave `sk_test_...` della Sandbox.
 - `STRIPE_SUBSCRIPTION_PRICE_ID`: prezzo `price_...` mensile della stessa Sandbox.
 - `STRIPE_EXPECTED_MONTHLY_CENTS`: 5000 significa 50 euro; deve coincidere con il prezzo Stripe. Prezzo fisso mensile, EUR, non tariffazione a consumo.
-- `SEASON_ID`, `SEASON_END_AT`: stagione e istante di fine approvati. La data richiede ora e offset, per esempio il formato `AAAA-MM-GGTHH:MM:SS+02:00` in ora legale italiana. Non copiare un esempio come decisione della società.
-- `BILLING_POLICY=anniversary_prorated_end`: soltanto se è stata approvata la modalità descritta sopra.
+- `STRIPE_REGISTRATION_FEE_CENTS=5000`: quota unica, distinta dalla mensilità. Il sito crea le voci iniziali con gli importi verificati sul server; non occorre un secondo prezzo ricorrente per l’iscrizione.
+- `SEASON_ID=2026-2027`: il calendario settembre–maggio viene calcolato da questa stagione. `SEASON_END_AT` non è più usato per le nuove iscrizioni; eliminarlo dalla configurazione per evitare confusione.
+- `BILLING_POLICY=calendar_full_months_day8`: quota unica, mese d’ingresso intero e successive mensilità il giorno 8.
+- L’apertura delle iscrizioni è il 1° settembre dell’anno iniziale della stagione, ora italiana. Rimuovere l’eventuale vecchio `PRESEASON_REGISTRATION_ENABLED`: non è più supportato.
 - `PAYMENT_TERMS_VERSION`: identificativo delle condizioni approvate; modificarlo quando cambiano le condizioni.
 - `PAYMENT_TERMS_APPROVED=true`: solo dopo l’approvazione effettiva.
 
@@ -121,7 +131,7 @@ I test automatici inclusi usano Stripe e invio email simulati: non sostituiscono
 4. Chiudere il browser dopo il pagamento: la notifica deve registrare l’esito e applicare la fine stagione. Controllare la scadenza sulla singola sottoscrizione Stripe.
 5. Famiglia con due figli e con più profili storici: verificare tutti i documenti e la separazione degli abbonamenti. Un altro genitore non deve poter aprire quei dati.
 6. Ricevuta email, storico, portale e cambio carta. Verificare documento fiscale separato con il commercialista, quando necessario.
-7. Rinnovo mensile e fine stagione con gli strumenti di simulazione temporale Stripe: controllare esattamente importo dell’ultimo periodo e assenza di addebiti dopo la scadenza. Non modificare l’orologio del server di produzione.
+7. Rinnovi con gli strumenti di simulazione temporale Stripe: controllare 50 euro per ogni mese previsto, la rata intera dell’8 maggio, la cancellazione all’8 giugno e l’assenza di una nuova rata di giugno. Provare ingresso il 20 settembre (100 euro), prima dell’8 (nessun doppio mese), a gennaio e a maggio (nessun abbonamento ricorrente). Non modificare l’orologio del server di produzione.
 8. Esenzione: sospendere PRIMA della fattura interessata scegliendo «Void invoices», attraversare una scadenza e verificare zero incassi e nessun recupero arretrato; riprendere alla scadenza concordata. La data di ripresa non sposta da sola il giorno di fatturazione.
 9. Assenza comunicata dopo l’emissione o il pagamento: verificare gestione separata di fattura esistente, rimborso o credito. Non annullare genericamente tutte le fatture di un cliente.
 10. Disdetta di un solo figlio, sospensione e scadenza stagionale contemporanee: non modificare l’altro abbonamento, non estendere la durata, non riattivare un abbonamento concluso.
@@ -139,6 +149,8 @@ Lo shop PayPal è conservato ma disabilitato per impostazione predefinita (`PAYP
 
 Non è stato effettuato alcun deploy né push. Conservare una copia della versione attualmente online e dell’archivio prima di sostituire i file del repository. Non sostituire la directory `.git` o il database con quelli di un altro computer.
 
+Per il caricamento e la configurazione di prova seguire anche [SANDBOX-RENDER.md](SANDBOX-RENDER.md). Render Free non conserva il database SQLite tra riavvii/deploy: è ammesso qui solo come ambiente di prova sacrificabile, non per incassi reali o per certificare la persistenza dell’archivio. Non copiare l’intera cartella sul normale Hosting Linux Aruba: il server Node.js non è supportato da quel prodotto. È invece possibile acquistare il dominio presso Aruba e collegarlo al servizio Node.js compatibile.
+
 Su Render: build `npm ci`, start `npm start`, Node compatibile con `package.json`; disco persistente, singola istanza e servizio che non vada in sospensione durante l’operatività dei pagamenti. La verifica `/healthz` controlla la raggiungibilità dell’app, non la correttezza dei pagamenti o il recapito delle email.
 
 Prima del live eseguire `npm test` e `npm run check:billing`, completare la checklist Sandbox, verificare i documenti con il consulente e registrare l’approvazione del responsabile della società. Creare/configurare poi prezzo, webhook e portale nell’ambiente LIVE, sostituire tutte le credenziali coerentemente e attivare `STRIPE_MODE=live` e `LIVE_PAYMENTS_ENABLED=true`. Non riusare ID Sandbox in live.
@@ -155,3 +167,7 @@ In caso di problemi non eseguire una seconda iscrizione o un ripristino automati
 - Fatturazione elettronica: https://support.stripe.com/questions/what-is-e-invoicing-and-how-to-do-it?locale=it-IT
 - Persistenza Render: https://render.com/docs/disks
 - Invio SMTP: https://nodemailer.com/smtp
+- Invio email HTTPS: https://resend.com/docs/api-reference/emails/send-email
+- Limiti del mittente di prova: https://resend.com/docs/knowledge-base/403-error-resend-dev-domain
+- Limiti Render Free: https://render.com/docs/free
+- Compatibilità hosting Aruba: https://guide.aruba.it/faq/hosting-e-domini/linguaggi-e-spazio-web-linux

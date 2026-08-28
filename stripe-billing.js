@@ -2,7 +2,7 @@ const Stripe = require('stripe');
 const { randomUUID } = require('node:crypto');
 const { transaction } = require('./database');
 const { createAccountAuth } = require('./account-auth');
-const { PublicError, digest, emailKey, objectId, origin, mode, allowMoney, season, safeStripeUrl, route } = require('./billing-config');
+const { PublicError, digest, emailKey, objectId, origin, mode, allowMoney, season, registrationQuote, safeStripeUrl, route } = require('./billing-config');
 
 function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: injectedStripe, sendMail } = {}) {
   const auth = createAccountAuth({ db, env, clock, sendMail });
@@ -24,7 +24,7 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
       throw new PublicError('Risorsa Stripe di un ambiente diverso. Operazione bloccata.', 409);
   }
   async function priceConfig() {
-    const settings = season(env, clock);
+    const settings = registrationQuote(season(env, clock), clock);
     if (!env.STRIPE_SUBSCRIPTION_PRICE_ID) throw new PublicError('Prezzo mensile Stripe non configurato.', 503);
     const price = await stripe().prices.retrieve(env.STRIPE_SUBSCRIPTION_PRICE_ID, { expand: ['product'] });
     checkMode(price);
@@ -139,25 +139,42 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
           } else return resumeAttempt(held, fingerprint);
         }
       }
+      const expiry = Math.min(seconds() + 3600, settings ? settings.quoteValidUntil - 60 : Infinity);
+      if (expiry < seconds() + 1860) throw new PublicError('Il mese sta cambiando: riprova dopo mezzanotte per avere il riepilogo corretto.', 409);
       const customerId = await customerForCheckout(email, context === 'registration' ? registration.nome_genitore : customer.nome);
       const id = 'RV' + randomUUID().replaceAll('-', '');
-      const expiry = Math.min(seconds() + 3600, settings?.end || Infinity);
-      if (expiry < seconds() + 1800) throw new PublicError('Le iscrizioni per questa stagione sono chiuse.', 409);
-      const amount = context === 'registration' ? settings.amount : items.reduce((n, item) => n + item.price * item.quantity, 0);
+      const amount = context === 'registration' ? settings.dueNow : items.reduce((n, item) => n + item.price * item.quantity, 0);
       const metadata = { local_order_id: id, context, rv_app: 'realvilla' };
+      const oneTime = (name, unitAmount) => ({ quantity: 1, price_data: { currency: 'eur', unit_amount: unitAmount, product_data: { name } } });
+      const initialItems = settings ? [oneTime(`Iscrizione Real Villa ${settings.id} · quota unica`, settings.registrationAmount)] : null;
+      if (settings?.paidMonth) initialItems.push(oneTime(`Mensilità ${settings.paidMonth} · mese d’ingresso intero`, settings.currentMonthAmount));
+      if (settings?.checkoutMode === 'subscription') initialItems.push({ price: settings.priceId, quantity: 1 });
       const params = {
-        mode: context === 'registration' ? 'subscription' : 'payment', locale: 'it', customer: customerId,
+        mode: settings ? settings.checkoutMode : 'payment', locale: 'it', customer: customerId,
         client_reference_id: id, metadata, expires_at: expiry, payment_method_types: ['card'],
         success_url: origin(env) + '/stripe/complete?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: origin(env) + (context === 'registration' ? '/cancel.html' : '/shop-cancel.html'),
         allow_promotion_codes: false,
-        line_items: context === 'registration' ? [{ price: settings.priceId, quantity: 1 }] : items.map(item => ({ quantity: item.quantity, price_data: { currency: 'eur', unit_amount: item.price, product_data: { name: item.name, description: 'Taglia: ' + item.size } } })),
+        line_items: initialItems || items.map(item => ({ quantity: item.quantity, price_data: { currency: 'eur', unit_amount: item.price, product_data: { name: item.name, description: 'Taglia: ' + item.size } } })),
       };
       if (settings) {
-        params.subscription_data = { metadata: { ...metadata, rv_season_end: String(settings.end), rv_season: settings.id } };
-        params.custom_text = { submit: { message: `Quota mensile con rinnovo nel giorno dell’iscrizione. Fine stagione: ${new Date(settings.end * 1000).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}. Ultimo periodo eventualmente proporzionale. Esenzioni solo previa approvazione della società.` } };
-        payload.payment_consent = { version: settings.consentVersion, terms: settings.version, accepted_at: iso(), policy: settings.policy, season_end: settings.end, monthly_cents: settings.amount };
-      } else params.payment_intent_data = { receipt_email: email, metadata };
+        if (settings.checkoutMode === 'subscription') {
+          params.payment_method_collection = 'always';
+          // The fee/current month are one-time invoice lines. Only the recurring
+          // line is deferred, preventing another charge for the entry month.
+          params.subscription_data = { trial_end: settings.firstRenewalAt,
+            trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
+            metadata: { ...metadata, rv_season_end: String(settings.end), rv_season: settings.id, rv_billing_policy: settings.policy } };
+        }
+        const date = value => new Date(value * 1000).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
+        const euros = value => (value / 100).toFixed(2).replace('.', ',') + ' EUR';
+        const future = settings.firstRenewalAt ? `${euros(settings.amount)} ogni giorno 8 dal ${date(settings.firstRenewalAt)} al ${date(settings.lastPaymentAt)}.` : 'Nessun altro rinnovo per questa stagione.';
+        params.custom_text = { submit: { message: `Oggi ${euros(settings.dueNow)}: iscrizione ${euros(settings.registrationAmount)}${settings.paidMonth ? ` e mensilità intera ${settings.paidMonth} ${euros(settings.currentMonthAmount)}` : ''}. ${future} Nessuna nuova mensilità da giugno ad agosto. Il differimento Stripe non rende gratuita la mensilità pagata oggi.` } };
+        payload.payment_consent = { version: settings.consentVersion, terms: settings.version, accepted_at: iso(), policy: settings.policy,
+          season: settings.id, season_end: settings.end, monthly_cents: settings.amount, registration_cents: settings.registrationAmount,
+          paid_month: settings.paidMonth, due_now_cents: settings.dueNow, first_renewal_at: settings.firstRenewalAt, renewals: settings.renewals };
+      }
+      if (params.mode === 'payment') params.payment_intent_data = { receipt_email: email, metadata };
       transaction(db, () => {
         db.prepare('INSERT INTO payment_orders(id,provider,context,status,payload,created_at) VALUES (?,\'stripe\',?,\'PENDING\',?,?)').run(id, context, JSON.stringify(payload), iso());
         db.prepare(`INSERT INTO rv_orders(order_id,request_key,email,fingerprint,enrollment_key,expected_amount,customer_id,season_json,checkout_params,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
@@ -227,17 +244,25 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
     if (session.status !== 'complete' || session.payment_status !== 'paid') return order;
     const local = db.prepare('SELECT * FROM rv_orders WHERE order_id=?').get(order.id);
     if (local && (session.amount_total !== local.expected_amount || session.currency !== local.currency || objectId(session.customer) !== local.customer_id)) throw new Error('CheckoutAmountOrOwnerMismatch');
-    if (order.context === 'registration' && session.mode !== 'subscription') throw new Error('CheckoutModeMismatch');
+    const expectedMode = local ? JSON.parse(local.checkout_params).mode : order.context === 'registration' ? 'subscription' : 'payment';
+    if (session.mode !== expectedMode) throw new Error('CheckoutModeMismatch');
     if (order.context === 'shop' && session.mode !== 'payment') throw new Error('CheckoutModeMismatch');
+    let subscription;
+    if (order.context === 'registration' && session.mode === 'subscription') {
+      const subscriptionId = objectId(session.subscription);
+      if (!subscriptionId) throw new Error('SubscriptionMissing');
+      subscription = await stripe().subscriptions.retrieve(subscriptionId);
+      checkMode(subscription);
+      if (local && (objectId(subscription.customer) !== local.customer_id || subscription.metadata?.local_order_id !== order.id))
+        throw new Error('SubscriptionOrderMismatch');
+    } else if (session.subscription) throw new Error('UnexpectedSubscription');
     transaction(db, () => {
       db.prepare("UPDATE payment_orders SET status='PAID',external_id=? WHERE id=?").run(session.id, order.id);
       if (local) db.prepare('UPDATE rv_orders SET paid_amount=? WHERE order_id=?').run(session.amount_total, order.id);
     });
-    if (order.context === 'registration') {
-      const subscriptionId = objectId(session.subscription);
-      if (!subscriptionId) throw new Error('SubscriptionMissing');
-      await locked('sub:' + subscriptionId, async () => syncSubscription(await stripe().subscriptions.retrieve(subscriptionId)));
-      await ensureEnd(subscriptionId);
+    if (subscription) {
+      await locked('sub:' + subscription.id, async () => syncSubscription(await stripe().subscriptions.retrieve(subscription.id)));
+      await ensureEnd(subscription.id);
     }
     return db.prepare('SELECT * FROM payment_orders WHERE id=?').get(order.id);
   }
@@ -290,7 +315,9 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
     const payload = order ? JSON.parse(order.payload) : {};
     const end = sub.cancel_at || (sub.cancel_at_period_end ? periodEnd(sub) : null);
     const pause = sub.pause_collection;
+    const consent = payload.payment_consent;
     return { id: sub.id, athlete: payload.nome_ragazzo || 'Iscrizione sportiva', status: state(sub), stripeStatus: sub.status,
+      billingPolicy: consent?.policy || null, lastPaymentAt: consent?.renewals?.filter(r => !end || r.at < end).at(-1)?.at || null,
       periodEnd: periodEnd(sub), cancelAt: end, seasonEnd: local?.season_end || null,
       paused: !!pause, resumesAt: pause?.resumes_at || null, pauseBehavior: pause?.behavior || null,
       amount: sub.items?.data?.[0]?.price?.unit_amount ?? null, currency: sub.currency || 'eur',
@@ -366,7 +393,13 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
     }));
     app.get('/api/account/orders', auth.required, route(async (req, res) => {
       const rows = db.prepare(`SELECT p.* FROM payment_orders p WHERE lower(COALESCE(json_extract(p.payload,'$.email'),json_extract(p.payload,'$.customer.email')))=? ORDER BY created_at DESC LIMIT 101`).all(req.account.email);
-      res.json({ orders: rows.slice(0, 100).map(o => ({ id: o.id, context: o.context, provider: o.provider, status: o.status, createdAt: o.created_at })), truncated: rows.length > 100 });
+      res.json({ orders: rows.slice(0, 100).map(o => {
+        const payload = JSON.parse(o.payload); const consent = payload.payment_consent;
+        return { id: o.id, context: o.context, provider: o.provider, status: o.status, createdAt: o.created_at,
+          athlete: o.context === 'registration' ? payload.nome_ragazzo || null : null,
+          paidMonth: consent?.paid_month || null, dueNow: consent?.due_now_cents ?? null,
+          noFutureRenewals: consent?.policy === 'calendar_full_months_day8' && Array.isArray(consent.renewals) && !consent.renewals.length };
+      }), truncated: rows.length > 100 });
     }));
     app.get('/api/account/orders/:id/receipt', auth.required, route(async (req, res) => {
       const order = db.prepare("SELECT * FROM payment_orders WHERE id=? AND provider='stripe'").get(req.params.id);
@@ -410,7 +443,7 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
     // Recover a completed Checkout even when its webhook or browser return was lost.
     const pending = db.prepare(`SELECT p.id,p.external_id,r.customer_id,r.created_at FROM payment_orders p JOIN rv_orders r ON r.order_id=p.id
       LEFT JOIN rv_reconcile_checks c ON c.order_id=p.id
-      WHERE p.provider='stripe' AND (p.status='PENDING' OR (p.status='PAID' AND p.context='registration' AND NOT EXISTS(SELECT 1 FROM rv_jobs j WHERE j.order_id=p.id)))
+      WHERE p.provider='stripe' AND (p.status='PENDING' OR (p.status='PAID' AND p.context='registration' AND json_extract(r.checkout_params,'$.mode')='subscription' AND NOT EXISTS(SELECT 1 FROM rv_jobs j WHERE j.order_id=p.id)))
       ORDER BY COALESCE(c.checked_at,0),r.created_at LIMIT 25`).all();
     for (const p of pending) {
       try {

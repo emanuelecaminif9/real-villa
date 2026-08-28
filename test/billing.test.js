@@ -3,18 +3,18 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { openDatabase } = require('../database');
 const { createStripeBilling } = require('../stripe-billing');
-const { season, origin, allowMoney, safeStripeUrl } = require('../billing-config');
+const { season, registrationQuote, origin, allowMoney, safeStripeUrl } = require('../billing-config');
 const { fakeStripe } = require('./fake-stripe');
 
 function fixture(t) {
   let time = Date.parse('2026-09-10T10:00:00Z'); const clock = () => time;
   const env = { BASE_URL: 'http://127.0.0.1:3000', STRIPE_SECRET_KEY: 'sk_test_fake_for_isolated_tests', STRIPE_MODE: 'test',
-    SEASON_ID: '2026-2027', SEASON_END_AT: '2027-06-30T23:59:59+02:00', STRIPE_EXPECTED_MONTHLY_CENTS: '5000', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_monthly',
-    BILLING_POLICY: 'anniversary_prorated_end', PAYMENT_TERMS_VERSION: 'test-v1', PAYMENT_TERMS_APPROVED: 'true', AUTH_SECRET: 'only-a-test-secret-'.repeat(5), STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test', STRIPE_WEBHOOK_SECRET: 'whsec_fake' };
+    SEASON_ID: '2026-2027', STRIPE_EXPECTED_MONTHLY_CENTS: '5000', STRIPE_REGISTRATION_FEE_CENTS: '5000', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_monthly',
+    BILLING_POLICY: 'calendar_full_months_day8', PAYMENT_TERMS_VERSION: 'test-v2', PAYMENT_TERMS_APPROVED: 'true', AUTH_SECRET: 'only-a-test-secret-'.repeat(5), STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test', STRIPE_WEBHOOK_SECRET: 'whsec_fake' };
   const db = openDatabase(':memory:'); const fake = fakeStripe(clock);
   const billing = createStripeBilling({ db, env, clock, stripe: fake.api, sendMail: async () => {} }); t.after(() => { billing.stopWorker(); db.close(); });
   const registration = { nome_ragazzo: 'Atleta Prova', nome_genitore: 'Genitore Prova', email: 'genitore@example.test', telefono: '3331234567', pacchetto: 'primi-calci', data_nascita: '2018-03-02' };
-  async function start(overrides = {}) { return billing.start({ context: 'registration', registration, account: { email: registration.email }, requestKey: randomUUID(), accepted: true, consentVersion: season(env, clock).consentVersion, ...overrides }); }
+  async function start(overrides = {}) { return billing.start({ context: 'registration', registration, account: { email: registration.email }, requestKey: randomUUID(), accepted: true, consentVersion: registrationQuote(season(env, clock), clock).consentVersion, ...overrides }); }
   function sessionFor(result) { return db.prepare('SELECT external_id FROM payment_orders WHERE id=?').get(result.orderId).external_id; }
   return { db, env, fake, billing, registration, start, sessionFor, clock, setTime: value => { time = value; } };
 }
@@ -55,7 +55,7 @@ test('checkout order and consent are persisted before contacting Stripe', async 
   const f = fixture(t); const create = f.fake.api.checkout.sessions.create;
   f.fake.api.checkout.sessions.create = async (params, options) => {
     const order = f.db.prepare('SELECT * FROM payment_orders WHERE id=?').get(params.client_reference_id);
-    assert.ok(order); assert.equal(JSON.parse(order.payload).payment_consent.policy, 'anniversary_prorated_end');
+    assert.ok(order); assert.equal(JSON.parse(order.payload).payment_consent.policy, 'calendar_full_months_day8');
     assert.ok(f.db.prepare('SELECT 1 FROM rv_orders WHERE order_id=?').get(order.id));
     return create(params, options);
   };
@@ -170,4 +170,73 @@ test('reconciliation repairs crash between recording payment and queuing the sea
   const f = fixture(t); const result = await f.start(); f.fake.paid(f.sessionFor(result));
   f.db.prepare("UPDATE payment_orders SET status='PAID'").run();
   await f.billing.reconcile(); assert.equal(f.db.prepare('SELECT done FROM rv_jobs').get().done, 1);
+});
+test('September 20 Checkout charges exactly 100 now and defers only the recurring line', async t => {
+  const f = fixture(t); f.setTime(Date.parse('2026-09-20T12:00:00+02:00'));
+  const result = await f.start(); const session = f.fake.state.sessions.get(f.sessionFor(result));
+  assert.equal(session.amount_total, 10000); assert.equal(session.line_items.length, 3);
+  assert.deepEqual(session.line_items.filter(i => i.price_data).map(i => i.price_data.unit_amount), [5000, 5000]);
+  assert.equal(session.subscription_data.trial_end, Date.parse('2026-10-08T08:00:00Z') / 1000);
+  assert.equal(session.payment_method_collection, 'always');
+  assert.equal(session.subscription_data.trial_settings.end_behavior.missing_payment_method, 'cancel');
+  assert.equal(session.payment_intent_data, undefined);
+  await f.billing.complete(f.fake.paid(session.id));
+  assert.equal(f.db.prepare('SELECT paid_amount FROM rv_orders').get().paid_amount, 10000);
+  assert.equal(f.fake.state.subs.get(f.fake.state.sessions.get(session.id).subscription).cancel_at, Date.parse('2027-06-08T08:00:00Z') / 1000);
+});
+test('May entry is confirmed as a one-time 100 payment without creating a subscription or retry job', async t => {
+  const f = fixture(t); f.setTime(Date.parse('2027-05-20T12:00:00+02:00'));
+  const result = await f.start(); const session = f.fake.paid(f.sessionFor(result));
+  assert.equal(session.mode, 'payment'); assert.equal(session.subscription_data, undefined); assert.equal(session.amount_total, 10000);
+  await f.billing.complete(session); await f.billing.reconcile();
+  assert.equal(f.db.prepare('SELECT status FROM payment_orders').get().status, 'PAID');
+  assert.equal(f.db.prepare('SELECT count(*) n FROM rv_jobs').get().n, 0); assert.equal(f.fake.state.subs.size, 0);
+  assert.equal((await f.billing.reconcile()).checked, 0);
+  await assert.rejects(f.start(), /già un’iscrizione/);
+});
+test('May cannot be falsely confirmed as subscription mode or with an unexpected subscription', async t => {
+  const f = fixture(t); f.setTime(Date.parse('2027-05-20T12:00:00+02:00'));
+  const result = await f.start(); const session = f.fake.paid(f.sessionFor(result));
+  await assert.rejects(f.billing.complete({ ...session, mode: 'subscription' }), /ModeMismatch/);
+  await assert.rejects(f.billing.complete({ ...session, subscription: 'sub_wrong' }), /UnexpectedSubscription/);
+  assert.equal(f.db.prepare('SELECT status FROM payment_orders').get().status, 'PENDING');
+});
+test('a paid Checkout cannot attach a subscription owned by another family', async t => {
+  const f = fixture(t); const result = await f.start(); const session = f.fake.paid(f.sessionFor(result));
+  f.fake.state.subs.get(session.subscription).customer = 'cus_other';
+  await assert.rejects(f.billing.complete(session), /SubscriptionOrderMismatch/);
+  assert.equal(f.db.prepare('SELECT status FROM payment_orders').get().status, 'PENDING');
+});
+test('client-supplied amounts cannot change the registration fee or current month', async t => {
+  const f = fixture(t); const result = await f.start({ registration: { ...f.registration, amount: 1, registrationAmount: 1, dueNow: 1 } });
+  assert.equal(f.fake.state.sessions.get(f.sessionFor(result)).amount_total, 10000);
+});
+test('checkout expires before calendar month rollover and late attempts fail without external creation', async t => {
+  const f = fixture(t); f.setTime(Date.parse('2026-09-30T23:00:00+02:00'));
+  const result = await f.start(); const session = f.fake.state.sessions.get(f.sessionFor(result));
+  assert.equal(session.expires_at, Date.parse('2026-09-30T23:59:00+02:00') / 1000);
+  f.setTime(Date.parse('2026-09-30T23:40:00+02:00'));
+  await assert.rejects(f.start({ registration: { ...f.registration, nome_ragazzo: 'Altro atleta' } }), /mese sta cambiando/);
+  assert.equal(f.fake.state.creates, 1);
+});
+test('stale month consent cannot initiate a different month payment', async t => {
+  const f = fixture(t); const consentVersion = registrationQuote(season(f.env, f.clock), f.clock).consentVersion;
+  f.setTime(Date.parse('2026-10-01T12:00:00+02:00'));
+  await assert.rejects(f.start({ consentVersion }), /condizioni/); assert.equal(f.fake.state.creates, 0);
+});
+test('a previous season snapshot keeps its original end; new policy does not migrate old orders', async t => {
+  const f = fixture(t); const result = await f.start(); const session = f.fake.paid(f.sessionFor(result));
+  const row = f.db.prepare('SELECT season_json FROM rv_orders').get(); const snapshot = JSON.parse(row.season_json);
+  snapshot.policy = 'anniversary_prorated_end'; snapshot.end = Date.parse('2027-06-30T21:59:59Z') / 1000;
+  f.db.prepare('UPDATE rv_orders SET season_json=?').run(JSON.stringify(snapshot));
+  await f.billing.complete(session); assert.equal(f.fake.state.subs.get(session.subscription).cancel_at, snapshot.end);
+});
+test('server rejects August enrollment before any customer or Checkout creation, even with stale consent and old flag', async t => {
+  const f = fixture(t); const consentVersion = registrationQuote(season(f.env, f.clock), f.clock).consentVersion;
+  f.setTime(Date.parse('2026-08-28T12:00:00+02:00')); f.env.PRESEASON_REGISTRATION_ENABLED = 'true';
+  await assert.rejects(f.billing.start({ context: 'registration', registration: f.registration,
+    account: { email: f.registration.email }, requestKey: randomUUID(), accepted: true, consentVersion }),
+  error => error.status === 409 && /aprono il 1° settembre 2026/.test(error.message));
+  assert.equal(f.fake.state.creates, 0); assert.equal(f.fake.state.customers.size, 0);
+  assert.equal(f.db.prepare('SELECT count(*) AS n FROM payment_orders').get().n, 0);
 });

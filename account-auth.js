@@ -1,5 +1,5 @@
 const { randomBytes, randomInt, createHmac, timingSafeEqual } = require('node:crypto');
-const nodemailer = require('nodemailer');
+const { mailConfiguration, createMailDelivery } = require('./mail-delivery');
 const { PublicError, emailKey, origin, route } = require('./billing-config');
 const { transaction } = require('./database');
 
@@ -12,7 +12,7 @@ function createAccountAuth({ db, env = process.env, clock = Date.now, sendMail }
   }
   const hash = value => createHmac('sha256', secret()).update(value).digest('hex');
   function available() {
-    try { secret(); origin(env); return !!(sendMail || (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS && env.MAIL_FROM)); }
+    try { secret(); origin(env); if (!sendMail) mailConfiguration(env); return true; }
     catch { return false; }
   }
   function limit(key, max, duration) {
@@ -46,20 +46,7 @@ function createAccountAuth({ db, env = process.env, clock = Date.now, sendMail }
     if (!req.account?.admin) return res.status(403).json({ error: 'Area riservata alla segreteria.' });
     next();
   }
-  let transport;
-  async function mail(message) {
-    if (sendMail) return sendMail(message);
-    if (!available()) throw new PublicError('Invio dei codici di accesso non ancora disponibile.', 503);
-    const port = Number(env.SMTP_PORT || 465);
-    if (![465, 587].includes(port)) throw new PublicError('Servizio email non configurato correttamente.', 503);
-    transport ||= nodemailer.createTransport({
-      host: env.SMTP_HOST, port, secure: port === 465, requireTLS: true,
-      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
-      disableFileAccess: true, disableUrlAccess: true,
-    });
-    await transport.sendMail({ from: env.MAIL_FROM, ...message });
-  }
+  const mail = sendMail || createMailDelivery({ env });
   function install(app) {
     app.use('/api/account', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
     app.get('/api/account/me', (req, res) => res.json({ account: current(req), available: available() }));
@@ -72,7 +59,7 @@ function createAccountAuth({ db, env = process.env, clock = Date.now, sendMail }
       const code = String(randomInt(10000000, 100000000));
       db.prepare('INSERT INTO rv_challenges(id,email,code_hash,expires_at) VALUES (?,?,?,?)').run(id, email, hash(id + ':' + code), seconds() + 600);
       try {
-        await mail({ to: email, subject: 'Real Villa · Codice di accesso ai pagamenti', text: `Il tuo codice di accesso è: ${code}\n\nÈ valido per 10 minuti e può essere usato una sola volta. Non comunicarlo a nessuno, nemmeno alla segreteria.\n\nSe non hai richiesto l’accesso, ignora questa email.\nASD Real Villa` });
+        await mail({ to: email, subject: 'Real Villa · Codice di accesso ai pagamenti', text: `Il tuo codice di accesso è: ${code}\n\nÈ valido per 10 minuti e può essere usato una sola volta. Non comunicarlo a nessuno, nemmeno alla segreteria.\n\nSe non hai richiesto l’accesso, ignora questa email.\nASD Real Villa` }, id);
       } catch (error) {
         db.prepare('UPDATE rv_challenges SET consumed=1 WHERE id=?').run(id);
         throw new PublicError('Non siamo riusciti a inviare il codice. Riprova più tardi o contatta la segreteria.', 503);

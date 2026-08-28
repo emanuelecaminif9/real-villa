@@ -14,15 +14,15 @@ async function main() {
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const product = await stripe.products.create({
-    name: "Iscrizione ASD Real Villa",
-    description: "Quota mensile di iscrizione alla stagione sportiva",
-  }, { idempotencyKey: 'realvilla-membership-product-v1' });
+    name: "Mensilità ASD Real Villa",
+    description: "Quota mensile sportiva. La quota unica d’iscrizione è distinta.",
+  }, { idempotencyKey: 'realvilla-monthly-product-v2' });
   const price = await stripe.prices.create({
     currency: "eur",
     unit_amount: 5000,
     recurring: { interval: "month" },
     product: product.id,
-  }, { idempotencyKey: 'realvilla-membership-monthly-5000-v1' });
+  }, { idempotencyKey: 'realvilla-monthly-5000-v2' });
 
   console.log(
     `Piano creato correttamente. Inserisci nelle variabili del server:\nSTRIPE_SUBSCRIPTION_PRICE_ID=${price.id}`,

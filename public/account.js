@@ -23,7 +23,9 @@
     card.append(RV.node('h3', sub.athlete), RV.node('span', RV.status(sub.status), 'billing-status' + (sub.status === 'ACTIVE' ? '' : ' attention')));
     const dates = RV.node('dl', null, 'billing-meta');
     function detail(label, value) { const block = RV.node('div'); block.append(RV.node('dt', label), RV.node('dd', value)); dates.append(block); }
-    detail('Quota mensile', RV.money(sub.amount, sub.currency)); detail('Fine abbonamento programmata', RV.date(sub.cancelAt));
+    detail('Quota mensile', RV.money(sub.amount, sub.currency));
+    if (sub.billingPolicy === 'calendar_full_months_day8') detail('Ultima mensilità programmata', RV.date(sub.lastPaymentAt));
+    detail('Chiusura dei rinnovi programmata', RV.date(sub.cancelAt));
     if (sub.paused) detail('Ripresa della riscossione', sub.resumesAt ? RV.date(sub.resumesAt) : 'Da concordare con la segreteria');
     else if (!['CANCELED', 'EXPIRED'].includes(sub.status)) detail('Fine del periodo corrente', RV.date(sub.periodEnd));
     card.append(dates);
@@ -55,7 +57,9 @@
   async function orders() {
     const data = await RV.request('/api/account/orders'); $('legacyOrders').replaceChildren();
     for (const order of data.orders) {
-      const row = RV.node('article', null, 'billing-card'); row.append(RV.node('strong', order.context === 'shop' ? 'Ordine shop' : 'Iscrizione'), RV.node('small', order.id), RV.node('p', RV.status(order.status) + ' · ' + (order.provider === 'stripe' ? 'Stripe' : 'PayPal')));
+      const row = RV.node('article', null, 'billing-card'); row.append(RV.node('strong', order.context === 'shop' ? 'Ordine shop' : `Iscrizione${order.athlete ? ' · ' + order.athlete : ''}`), RV.node('small', order.id), RV.node('p', RV.status(order.status) + ' · ' + (order.provider === 'stripe' ? 'Stripe' : 'PayPal')));
+      if (order.dueNow != null) row.append(RV.node('p', `Pagamento iniziale: ${RV.money(order.dueNow)}${order.paidMonth ? ' · comprende la mensilità ' + order.paidMonth : ''}.`));
+      if (order.noFutureRenewals) row.append(RV.node('p', 'Ultimo mese della stagione: nessun rinnovo futuro.', 'billing-note'));
       if (order.provider === 'stripe' && order.status === 'PAID') {
         const button = RV.node('button', 'Apri il documento del pagamento', 'billing-secondary');
         button.addEventListener('click', () => busy(button, async () => { const result = await RV.request('/api/account/orders/' + encodeURIComponent(order.id) + '/receipt'); const url = RV.safeUrl(result.url); if (url) location.assign(url); })); row.append(button);
@@ -76,7 +80,7 @@
       const overview = await RV.request('/api/account/overview'); $('testNotice').hidden = !overview.testMode;
       $('subscriptions').replaceChildren(); $('profiles').replaceChildren(); $('paymentRows').replaceChildren();
       for (const profile of overview.profiles) for (const sub of profile.subscriptions) $('subscriptions').append(subscriptionCard(sub));
-      if (!$('subscriptions').children.length) $('subscriptions').append(RV.node('p', 'Nessun abbonamento Stripe associato a questa email.'));
+      if (!$('subscriptions').children.length) $('subscriptions').append(RV.node('p', 'Nessun abbonamento ricorrente associato a questa email. Le iscrizioni effettuate nell’ultimo mese restano visibili negli ordini e nelle ricevute, senza rinnovi futuri.'));
       if (overview.profiles.length) {
         const select = RV.node('select'); select.setAttribute('aria-label', 'Profilo pagamenti');
         overview.profiles.forEach((p, index) => { const option = RV.node('option', overview.profiles.length > 1 ? `Profilo ${index + 1} · ${p.subscriptions.length} abbonamenti` : 'Pagamenti della famiglia'); option.value = p.id; select.append(option); });

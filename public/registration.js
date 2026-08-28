@@ -16,9 +16,14 @@
         button.textContent = 'Accedi prima di procedere';
       } else { access.textContent = 'Accesso verificato: ' + account.email; form.elements.email.value = account.email; form.elements.email.readOnly = true; }
       config = await RV.request('/api/billing/config');
+      document.getElementById('registrationAmount').textContent = RV.money(config.registrationAmount);
       document.getElementById('monthlyAmount').textContent = RV.money(config.amount);
-      document.getElementById('seasonEnd').textContent = RV.date(config.end);
-      document.getElementById('registrationConfig').textContent = `${config.testMode ? 'PROVA SANDBOX · Nessun denaro reale. ' : ''}${RV.money(config.amount)} alla sottoscrizione, poi ogni mese nello stesso giorno (o nell’ultimo giorno del mese quando necessario). Fine stagione: ${RV.date(config.end)}. L’ultimo periodo può avere un importo proporzionale alla sua durata. Nessun rinnovo oltre la scadenza prevista.`;
+      document.getElementById('dueNowAmount').textContent = RV.money(config.dueNow);
+      document.getElementById('seasonEnd').textContent = config.firstRenewalAt ? RV.date(config.lastPaymentAt) : 'Maggio · inclusa nel pagamento iniziale';
+      const paidMonth = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric', timeZone: 'Europe/Rome' }).format(new Date(config.paidMonth + '-15T12:00:00Z'));
+      document.getElementById('dueNowDetail').textContent = `${RV.money(config.registrationAmount)} iscrizione + ${RV.money(config.currentMonthAmount)} mensilità di ${paidMonth}`;
+      const future = config.firstRenewalAt ? `Il prossimo addebito di ${RV.money(config.amount)} è previsto l’${RV.date(config.firstRenewalAt)}; l’ultimo l’${RV.date(config.lastPaymentAt)}.` : 'Non sono previsti altri rinnovi per questa stagione.';
+      document.getElementById('registrationConfig').textContent = `${config.testMode ? 'PROVA SANDBOX · Nessun denaro reale. ' : ''}Oggi ${RV.money(config.dueNow)}: iscrizione una tantum e mese d’ingresso intero (${paidMonth}). ${future} Nessuna nuova mensilità a giugno, luglio o agosto.`;
       if (account && config.accessAvailable) { button.disabled = false; button.textContent = 'Conferma e paga con Stripe'; }
     } catch (error) { document.getElementById('registrationConfig').textContent = error.message; button.textContent = 'Iscrizioni online non disponibili'; }
   }

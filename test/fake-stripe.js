@@ -19,7 +19,7 @@ function fakeStripe(clock) {
       create: async (params, options) => {
         if (state.keys.has(options.idempotencyKey)) return copy(state.keys.get(options.idempotencyKey));
         state.creates++;
-        const session = { id: id('cs_test_'), ...copy(params), status: 'open', payment_status: 'unpaid', amount_total: params.mode === 'subscription' ? 5000 : params.line_items.reduce((sum, i) => sum + i.quantity * i.price_data.unit_amount, 0), currency: 'eur', livemode: false };
+        const session = { id: id('cs_test_'), ...copy(params), status: 'open', payment_status: 'unpaid', amount_total: params.line_items.reduce((sum, i) => sum + i.quantity * (i.price_data?.unit_amount ?? (params.subscription_data?.trial_end ? 0 : 5000)), 0), currency: 'eur', livemode: false };
         session.url = 'https://checkout.stripe.com/c/pay/' + session.id;
         state.sessions.set(session.id, session); state.keys.set(options.idempotencyKey, session);
         if (state.failCreateOnce) { state.failCreateOnce = false; throw new Error('SimulatedNetworkTimeout'); }
@@ -40,8 +40,10 @@ function fakeStripe(clock) {
     const session = state.sessions.get(sessionId); session.status = 'complete'; session.payment_status = 'paid';
     if (session.mode === 'subscription') {
       const subId = id('sub_'); session.subscription = subId;
-      state.subs.set(subId, { id: subId, customer: session.customer, livemode: false, currency: 'eur', status: 'active', metadata: session.subscription_data.metadata,
-        items: { data: [{ current_period_end: Math.floor(clock() / 1000) + 30 * 86400, price: { unit_amount: 5000 } }] }, cancel_at: null, pause_collection: null });
+      const trialEnd = session.subscription_data.trial_end;
+      state.subs.set(subId, { id: subId, customer: session.customer, livemode: false, currency: 'eur', status: trialEnd ? 'trialing' : 'active', metadata: session.subscription_data.metadata,
+        trial_end: trialEnd || null, billing_cycle_anchor: trialEnd || Math.floor(clock() / 1000),
+        items: { data: [{ current_period_end: trialEnd || Math.floor(clock() / 1000) + 30 * 86400, quantity: 1, price: { id: 'price_monthly', unit_amount: 5000 } }] }, cancel_at: null, pause_collection: null });
     }
     return copy(session);
   }
