@@ -20,9 +20,9 @@ La regola comunicata è: iscrizione una tantum 50 euro; mensilità intera 50 eur
 
 Il codice applica il pagamento intero del mese d’ingresso anche a chi entra prima dell’8: quel mese non viene addebitato una seconda volta. In caso di ingresso a maggio il pagamento è una tantum di 100 euro e non viene creato un abbonamento senza rinnovi. Non vengono recuperate automaticamente mensilità anteriori all’ingresso.
 
-La società ha confermato che le iscrizioni partono da settembre: apertura il 1° settembre 2026 alle 00:00, ora italiana. Non si incassano iscrizioni anticipate ad agosto. Il server blocca i nuovi checkout d’iscrizione prima dell’apertura; il vecchio flag `PRESEASON_REGISTRATION_ENABLED` non è più utilizzato e non può anticiparla. Il blocco vale anche in Sandbox: i test automatici usano date simulate senza cambiare l’orologio del sito online.
+La società ha confermato che le iscrizioni reali partono il 1° settembre 2026 alle 00:00, ora italiana. Solo per il collaudo, `SANDBOX_EARLY_REGISTRATION=true` simula un ingresso a settembre prima dell’apertura: 100 euro di prova subito, poi 50 euro dall’8 ottobre a maggio. Richiede contemporaneamente `STRIPE_MODE=test`, chiave `sk_test_...` e `LIVE_PAYMENTS_ENABLED=false`; configurazioni live con questa opzione sono rifiutate. Non cambia l’orologio, non riapre stagioni chiuse e non anticipa gli incassi reali. Il vecchio `PRESEASON_REGISTRATION_ENABLED` resta ignorato.
 
-Le nuove sottoscrizioni utilizzano un differimento Stripe (`trial_end`) soltanto per la componente ricorrente. Iscrizione ed eventuale mese corrente sono voci una tantum, da pagare subito. Nel pannello Stripe può comparire “trial / prova”: non significa che la mensilità iniziale sia gratuita. La carta viene comunque richiesta nel Checkout.
+Le nuove sottoscrizioni utilizzano un differimento Stripe (`trial_end`) soltanto per la componente ricorrente. Iscrizione e mese d’ingresso sono voci una tantum, da pagare subito. Nel pannello Stripe può comparire “trial / prova”: non significa che la mensilità iniziale sia gratuita. Il Checkout richiede un metodo di pagamento: carta oppure autorizzazione PayPal. Entrambi appartengono allo stesso sistema Stripe e alla stessa scadenza stagionale.
 
 Per incassare integralmente maggio senza una rata di giugno, la cancellazione Stripe è programmata sul confine del periodo successivo, l’8 giugno, allo stesso orario UTC del rinnovo. L’ultima nuova mensilità è quella dell’8 maggio; l’8 giugno non deve essere emessa un’ulteriore rata. Le nuove iscrizioni chiudono alla fine del 31 maggio, ora italiana. Non cambiare la cancellazione al 31 maggio: accorciare in anticipo un periodo Stripe futuro può causare un importo proporzionale.
 
@@ -141,7 +141,7 @@ I test automatici inclusi usano Stripe e invio email simulati: non sostituiscono
 
 La migrazione delle tabelle è aggiuntiva: non cancella ordini o sottoscrizioni. Le vecchie posizioni NON ricevono automaticamente la nuova data: vanno verificate e, se concordato, aggiornate individualmente su Stripe.
 
-Le nuove iscrizioni stagionali sono instradate su Stripe. Gli abbonamenti PayPal già esistenti continuano a essere gestiti da PayPal e non vengono interrotti dalla nuova versione. La vecchia disdetta del sito con soli email e telefono è disabilitata per sicurezza.
+Le nuove iscrizioni stagionali offrono carta e PayPal tramite Stripe Checkout: importi, storico, ricevute, notifiche e scadenza sono gestiti dalla stessa integrazione Stripe. PayPal ricorrente deve essere disponibile sull’account Stripe; in live collegare l’account PayPal Business e completare le eventuali approvazioni. Gli abbonamenti PayPal DIRETTI già esistenti continuano a essere gestiti separatamente da PayPal e non vengono interrotti. La vecchia disdetta del sito con soli email e telefono è disabilitata per sicurezza.
 
 Lo shop PayPal è conservato ma disabilitato per impostazione predefinita (`PAYPAL_CHECKOUT_ENABLED=false`). Non è coperto dai nuovi test finanziari Stripe: prima di riattivarlo eseguire il suo collaudo separato. Questa versione non afferma equivalenza delle funzionalità fra i due provider.
 
@@ -153,7 +153,7 @@ Per il caricamento e la configurazione di prova seguire anche [SANDBOX-RENDER.md
 
 Su Render: build `npm ci`, start `npm start`, Node compatibile con `package.json`; disco persistente, singola istanza e servizio che non vada in sospensione durante l’operatività dei pagamenti. La verifica `/healthz` controlla la raggiungibilità dell’app, non la correttezza dei pagamenti o il recapito delle email.
 
-Prima del live eseguire `npm test` e `npm run check:billing`, completare la checklist Sandbox, verificare i documenti con il consulente e registrare l’approvazione del responsabile della società. Creare/configurare poi prezzo, webhook e portale nell’ambiente LIVE, sostituire tutte le credenziali coerentemente e attivare `STRIPE_MODE=live` e `LIVE_PAYMENTS_ENABLED=true`. Non riusare ID Sandbox in live.
+Prima del live eseguire `npm test` e `npm run check:billing`, completare la checklist Sandbox per CARTA E PAYPAL, verificare i documenti con il consulente e registrare l’approvazione del responsabile della società. Disattivare `SANDBOX_EARLY_REGISTRATION=false`. Creare/configurare poi prezzo, webhook e portale nell’ambiente LIVE, collegare e abilitare PayPal ricorrente su Stripe, sostituire tutte le credenziali coerentemente e attivare `STRIPE_MODE=live` e `LIVE_PAYMENTS_ENABLED=true`. Non riusare ID Sandbox in live. Non utilizzare Render Free per gli incassi reali con questo archivio SQLite.
 
 In caso di problemi non eseguire una seconda iscrizione o un ripristino automatico di un vecchio database: si rischiano duplicati o dati mancanti. Conservare log e riferimenti, verificare i pagamenti su Stripe e intervenire con il responsabile.
 

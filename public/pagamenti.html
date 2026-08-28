@@ -51,7 +51,7 @@
             <span class="eyebrow">Real Villa</span>
             <h2>Un passo dalla squadra.</h2>
             <p>
-              Verifica la tua email, leggi le condizioni e completa il pagamento sul sito sicuro di Stripe.
+              Verifica la tua email, leggi le condizioni e scegli carta oppure PayPal nel checkout sicuro gestito da Stripe.
             </p>
             <div class="subscription-summary">
               <div>
@@ -111,7 +111,7 @@
                 </select>
               </div>
               <input type="hidden" name="provider" value="stripe">
-              <p class="billing-note">Carta · Stripe. Le nuove iscrizioni utilizzano il piano stagionale. Gli abbonamenti PayPal già attivi restano gestibili dal proprio account PayPal.</p>
+              <div class="billing-note" aria-label="Metodi di pagamento"><strong>Carta oppure PayPal</strong><p>Scegli il metodo nella prossima schermata di pagamento sicuro. Importi e scadenze sono gli stessi: una sola iscrizione, senza due abbonamenti.</p></div>
               <label class="billing-check"><input id="paymentConsent" type="checkbox" required><span>Dichiaro di essere il genitore/tutore dell’atleta e autorizzo gli addebiti descritti nelle <a class="billing-link" href="condizioni-pagamenti.html" target="_blank" rel="noopener">condizioni di pagamento</a>, inclusa la scadenza della stagione. Le esenzioni richiedono l’approvazione della società.</span></label>
               <p class="checkout-error" id="registrationError" role="alert" hidden></p>
               <button id="registrationSubmit" type="submit" class="button" disabled>Verifica configurazione…</button>

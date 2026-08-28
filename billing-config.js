@@ -31,6 +31,7 @@ function requireStorage(env = process.env) {
 }
 function allowMoney(env = process.env) {
   const currentMode = mode(env);
+  sandboxEarlyRegistration(env);
   if (currentMode === 'live') {
     if (env.LIVE_PAYMENTS_ENABLED !== 'true' || !origin(env).startsWith('https:'))
       throw new PublicError('I pagamenti reali non sono ancora abilitati.', 503);
@@ -39,6 +40,13 @@ function allowMoney(env = process.env) {
       throw new PublicError('Conferme e ricevute Stripe devono essere configurate prima degli incassi.', 503);
   }
   return currentMode;
+}
+function sandboxEarlyRegistration(env = process.env) {
+  if (env.SANDBOX_EARLY_REGISTRATION !== 'true') return false;
+  // Fail closed even if a test flag is accidentally left in a live deployment.
+  if (env.STRIPE_MODE !== 'test' || mode(env) !== 'test' || env.LIVE_PAYMENTS_ENABLED !== 'false')
+    throw new PublicError('La prova anticipata richiede STRIPE_MODE=test, una chiave di test e LIVE_PAYMENTS_ENABLED=false.', 503);
+  return true;
 }
 const romeDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
 const romeHour = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hourCycle: 'h23' });
@@ -55,6 +63,7 @@ function renewalAt(year, month) {
   return Date.UTC(year, month - 1, 8, 8) / 1000;
 }
 function season(env = process.env, clock = Date.now) {
+  const earlyTest = sandboxEarlyRegistration(env);
   const years = /^(\d{4})-(\d{4})$/.exec(env.SEASON_ID || '');
   if (!years || Number(years[2]) !== Number(years[1]) + 1 || Number(years[1]) < 2020 || Number(years[2]) > 2100)
     throw new PublicError('La stagione sportiva deve essere configurata dalla società.', 503);
@@ -74,16 +83,19 @@ function season(env = process.env, clock = Date.now) {
     // May is charged in full on May 8. Cancel at the NEXT period boundary:
     // no June invoice and no shortened/prorated May period.
     end: renewalAt(endYear, 6), lastPaymentAt: renewalAt(endYear, 5), amount, registrationAmount,
-    billingDay: 8, currency: 'eur', policy: env.BILLING_POLICY, version: env.PAYMENT_TERMS_VERSION };
+    billingDay: 8, currency: 'eur', policy: env.BILLING_POLICY, version: env.PAYMENT_TERMS_VERSION,
+    sandboxEarlyRegistration: earlyTest };
   return { ...result, consentVersion: digest(JSON.stringify(result)) };
 }
 function registrationQuote(settings, clock = Date.now) {
   const now = Math.floor(clock() / 1000); const today = calendarParts(clock());
-  const currentIndex = today.year * 12 + today.month - 1;
+  const actualIndex = today.year * 12 + today.month - 1;
   const firstIndex = settings.startYear * 12 + 8; const lastIndex = settings.endYear * 12 + 4;
+  const sandboxCalendarPreview = settings.sandboxEarlyRegistration === true && now < settings.start;
+  const currentIndex = sandboxCalendarPreview ? firstIndex : actualIndex;
   if (currentIndex > lastIndex || now >= settings.enrollmentEndsAt)
     throw new PublicError('Le iscrizioni online per questa stagione sono chiuse.', 409);
-  if (now < settings.start || currentIndex < firstIndex)
+  if (!sandboxCalendarPreview && (now < settings.start || currentIndex < firstIndex))
     throw new PublicError(`Le iscrizioni per la stagione ${settings.id} aprono il 1° settembre ${settings.startYear}.`, 409);
   const monthKey = index => `${Math.floor(index / 12)}-${String(index % 12 + 1).padStart(2, '0')}`;
   const paidMonth = monthKey(currentIndex);
@@ -93,10 +105,10 @@ function registrationQuote(settings, clock = Date.now) {
   const firstRenewalAt = renewals[0]?.at || null;
   if (firstRenewalAt && (firstRenewalAt < now + 48 * 3600 || firstRenewalAt > now + 730 * 86400))
     throw new PublicError('La prima scadenza non è compatibile con questo tentativo. Contatta la segreteria.', 409);
-  const result = { ...settings, paidMonth, currentMonthAmount: settings.amount,
+  const result = { ...settings, paidMonth, currentMonthAmount: settings.amount, sandboxCalendarPreview,
     dueNow: settings.registrationAmount + settings.amount, firstRenewalAt, renewals,
     checkoutMode: renewals.length ? 'subscription' : 'payment',
-    quoteValidUntil: Math.min(monthStart(today.year, today.month + 1), settings.enrollmentEndsAt) };
+    quoteValidUntil: Math.min(sandboxCalendarPreview ? settings.start : monthStart(today.year, today.month + 1), settings.enrollmentEndsAt) };
   // Stable within the same calendar month; invalidates stale consent at rollover.
   return { ...result, consentVersion: digest(JSON.stringify(result)) };
 }

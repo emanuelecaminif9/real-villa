@@ -1,93 +1,104 @@
-# Real Villa — prossimo passo: prove su Render
+# Real Villa — carta, PayPal e prove anticipate
 
-Le modifiche sono già nella cartella `/Users/emanuelecaminti/Desktop/REALVILLA`. Non è stato effettuato un caricamento su GitHub o un deploy su Render. Lo ZIP consegnato è una copia dei sorgenti aggiornati, senza credenziali, database o cronologia Git: non serve estrarlo sopra la cartella di lavoro.
+Aggiornamento del 28 agosto 2026. Solo Sandbox: non pronto per incassi reali.
 
-## 1. Apertura delle iscrizioni confermata
+## Cosa cambia
 
-Il caso concordato è pronto: il 20 settembre si pagano 100 euro (50 iscrizione + 50 settembre), poi 50 euro ogni 8 da ottobre a maggio. Il mese d’ingresso viene pagato subito anche entrando prima dell’8, senza un secondo addebito nello stesso mese: confermare anche questa applicazione prima del live.
+- Le nuove iscrizioni offrono **carta oppure PayPal nella schermata Stripe Checkout**. Il sito apre un’unica sessione; scegli il metodo lì. I due metodi condividono importi, storico, ricevute, controlli duplicati e fine stagione.
+- Non servono nuove chiavi PayPal separate su Render per questa integrazione. `PAYPAL_CHECKOUT_ENABLED` riguarda il vecchio shop PayPal diretto, non le nuove iscrizioni. Lasciarlo disattivato durante queste prove.
+- La prova anticipata simula un ingresso a settembre: 100 euro di test subito (50 iscrizione + 50 settembre), poi 50 euro dall’8 ottobre all’8 maggio. Non addebita agosto, non cambia l’orologio e non apre le iscrizioni reali prima del 1° settembre.
+- Da settembre in poi valgono le regole normali, anche in Sandbox: ingresso a dicembre = 100 euro subito e rinnovi da gennaio; nessun arretrato. Ingresso a maggio = 100 euro senza rinnovi.
 
-**Le iscrizioni aprono il 1° settembre 2026 alle 00:00, ora italiana. Non sono previste iscrizioni anticipate ad agosto.** Il messaggio di blocco prima dell’apertura è intenzionale, anche in Sandbox: non è un errore della chiave Stripe. Il vecchio `PRESEASON_REGISTRATION_ENABLED` è stato eliminato dalla configurazione e, se ancora presente su Render, viene ignorato.
+Il software richiede ancora accesso email e accettazione delle condizioni: la Sandbox non aggira la verifica dell’identità.
 
-I test automatici inclusi simulano il passaggio dal 31 agosto al 1° settembre e verificano 100 euro subito, senza una seconda rata l’8 settembre; il primo rinnovo è l’8 ottobre. È possibile prepararne email, prezzo e webhook prima dell’apertura. Per una prova anticipata end-to-end con date diverse serve un ambiente di collaudo separato: non cambiare l’orologio o la stagione del sito pubblico per aggirare il blocco.
+## 1. Render: completare Environment
 
-## 2. Preparare le email dei codici di accesso
+Nello screenshot ricevuto sono presenti nove nomi di variabili; i valori oscurati non sono verificabili. Le righe nuove necessarie sono indicate sotto. Se una variabile esiste già, modificarla senza crearne un duplicato.
 
-Render Free blocca le porte SMTP. Il sito ora supporta Resend via HTTPS, mantenendo l’accesso con codice monouso. [Documentazione Render](https://render.com/docs/free).
-
-1. Aprire [Resend](https://resend.com/) e creare il proprio account, se non esiste già.
-2. Nella sezione **API Keys**, creare una chiave con permesso di invio email. Conservarla privatamente; non inviarla in chat né salvarla su GitHub.
-3. Per la prima prova senza dominio usare `MAIL_FROM=Real Villa <onboarding@resend.dev>`.
-4. Sul sito richiedere il codice usando **la stessa email con cui è stato creato l’account Resend**. Quel mittente di prova non può inviare ad altre famiglie. Per altri destinatari serve un proprio dominio verificato. [Limiti ufficiali del mittente di prova](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
-
-Per il live usare un dominio mittente della società verificato e completare le verifiche privacy e di recapito. L’integrazione software non crea automaticamente un account Resend e non approva le condizioni del fornitore al posto della società.
-
-## 3. Valori da inserire su Render
-
-Aprire il servizio **real-villa → Environment → Edit**. Non incollare segreti nell’HTML, nelle chat, nei log o nei file pubblici. Non modificare `AUTH_SECRET` se è già configurato correttamente.
-
-| Nome | Valore |
+| Nome | Valore per questa prova |
 | --- | --- |
 | `BASE_URL` | `https://real-villa.onrender.com` |
 | `STRIPE_MODE` | `test` |
 | `LIVE_PAYMENTS_ENABLED` | `false` |
-| `STRIPE_SECRET_KEY` | La chiave `sk_test_…` della Sandbox, inserita privatamente |
-| `STRIPE_SUBSCRIPTION_PRICE_ID` | Il `price_…` da 50 EUR **al mese**, nella stessa Sandbox |
+| `SANDBOX_EARLY_REGISTRATION` | `true` — nuova |
+| `STRIPE_SECRET_KEY` | Conservare la propria `sk_test_…` della Sandbox |
+| `STRIPE_SUBSCRIPTION_PRICE_ID` | Il `price_…` da 50 EUR al mese della stessa Sandbox |
 | `STRIPE_EXPECTED_MONTHLY_CENTS` | `5000` |
-| `STRIPE_REGISTRATION_FEE_CENTS` | `5000` |
+| `STRIPE_REGISTRATION_FEE_CENTS` | `5000` — se assente il valore predefinito è già 5000 |
 | `SEASON_ID` | `2026-2027` |
 | `BILLING_POLICY` | `calendar_full_months_day8` |
-| `PAYMENT_TERMS_VERSION` | `2026-2027-sandbox-v3` |
-| `PAYMENT_TERMS_APPROVED` | `true` soltanto dopo aver letto e approvato le regole per il collaudo |
-| `MAIL_PROVIDER` | `resend` |
-| `RESEND_API_KEY` | La propria chiave Resend `re_…`, inserita privatamente |
-| `MAIL_FROM` | `Real Villa <onboarding@resend.dev>` per la sola prova limitata del punto 2 |
-| `AUTH_SECRET` | Un valore casuale di almeno 48 caratteri, generato con un password manager e conservato stabile |
-| `ADMIN_EMAILS` | La propria email autorizzata per la segreteria; altre email separate da virgola |
-| `PAYMENTS_STORAGE_CONFIRMED` | `false` su Render Free |
-| `PAYPAL_CHECKOUT_ENABLED` | `false` durante questo collaudo Stripe |
+| `PAYMENT_TERMS_VERSION` | `2026-2027-sandbox-v4` |
+| `PAYMENT_TERMS_APPROVED` | `true` dopo aver letto e confermato le regole del collaudo — nuova |
+| `AUTH_SECRET` | Un segreto casuale di almeno 48 caratteri — nuova, conservarlo privato e stabile |
+| `MAIL_PROVIDER` | `resend` — nuova |
+| `RESEND_API_KEY` | La propria chiave `re_…`, inserita privatamente — nuova |
+| `MAIL_FROM` | `Real Villa <onboarding@resend.dev>` per la prova limitata descritta sotto — nuova |
 
-I puntini nei riferimenti alle chiavi sono descrittivi: non sono valori da copiare. La chiave pubblicabile Stripe non serve per questo Checkout ospitato. La quota d’iscrizione è una voce una tantum creata dal server: **non creare un secondo abbonamento da 50 euro per l’iscrizione**. Il prezzo mensile già creato può essere riutilizzato se corrisponde a questi requisiti.
+Per generare AUTH_SECRET sul proprio Mac si può usare `openssl rand -hex 32`: copiare il risultato SOLO nel valore su Render, non in chat o su GitHub. Non sostituire un AUTH_SECRET già valido: interromperebbe le sessioni esistenti.
 
-Rimuovere i vecchi `SEASON_END_AT` e `PRESEASON_REGISTRATION_ENABLED`: non vengono più usati per le nuove iscrizioni. Conservare l’attuale `PAYMENTS_DB_PATH` se vi sono dati da verificare; su un nuovo ambiente Free di sola prova è possibile usare `./payments.db`, sapendo che i dati sono effimeri. Non impostare un finto disco persistente e non sostituire il database locale con quello dello ZIP.
+Non creare un secondo abbonamento per i 50 euro di iscrizione. Il server crea le due quote iniziali una tantum e differisce solo il rinnovo mensile.
 
-### Webhook e portale
+### Codici email: serve un account Resend
 
-- Nella **stessa Sandbox Stripe**, configurare la destinazione `https://real-villa.onrender.com/stripe/webhook` con gli eventi elencati in [ATTIVAZIONE-SICURA.md](ATTIVAZIONE-SICURA.md), quindi impostare su Render il relativo `STRIPE_WEBHOOK_SECRET=whsec_…`.
-- Per il pulsante «Documenti e metodo di pagamento» occorre anche `STRIPE_PORTAL_CONFIGURATION_ID=bpc_…`. Il portale deve permettere storico e aggiornamento carta, ma non cambio piano o disdetta: questi ultimi sono gestiti dal sito. Lo strumento `npm run setup:portal` crea una configurazione dedicata usando le chiavi Sandbox del proprio computer; non eseguirlo in live per una prova.
-- Attivare e verificare le ricevute Stripe come descritto nella guida completa. Non impostare `STRIPE_RECEIPTS_CONFIGURED=true` prima della verifica.
+1. Aprire [Resend](https://resend.com/) e creare il proprio account se non esiste.
+2. In **API Keys**, creare una chiave per l’invio e inserirla privatamente in `RESEND_API_KEY` su Render.
+3. Con il mittente `onboarding@resend.dev`, sul sito accedere **con la stessa email dell’account Resend**. Questo mittente non invia alle altre famiglie. Per altri destinatari serve un dominio mittente verificato.
 
-Su Render scegliere **Save only** se il codice nuovo non è ancora stato caricato, poi distribuire insieme codice e configurazione. Se il codice è già presente, usare **Save, rebuild, and deploy** / **Save and deploy**, secondo la voce disponibile. Un semplice salvataggio senza distribuzione non applica i nuovi valori al processo già attivo. [Gestione delle variabili Render](https://render.com/docs/configure-environment-variables).
+Non sono stati creati account email né modificati DNS al posto della società. Render Free blocca SMTP sulle porte comuni: il sito usa Resend via HTTPS.
 
-## 4. Caricare il codice, quando configurazione e regole sono pronte
+Fonti: [limite del mittente Resend](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain), [Render Free](https://render.com/docs/free).
 
-Non è necessario creare un altro repository: la cartella REALVILLA è già collegata al progetto esistente. In GitHub Desktop è possibile selezionarla, controllare le modifiche, fare il commit e usare **Push origin**. Verificare che fra i file caricati ci sia anche il nuovo `mail-delivery.js`, oltre a `billing-config.js`, `account-auth.js` e `stripe-billing.js`. Non caricare `.env`, database, backup o `node_modules`.
+## 2. Stripe: PayPal nella stessa Sandbox
 
-Se si usa il Terminale, questi comandi sono un’alternativa da eseguire **uno alla volta**, interrompendosi in caso di errore. Sono limitati ai file di questo aggiornamento:
+Aprire la stessa Sandbox a cui appartiene `sk_test_…`. In **Impostazioni → Metodi di pagamento**, verificare PayPal e attivarlo nell’ambiente di test se richiesto. Stripe documenta i pagamenti PayPal ricorrenti come abilitati per impostazione predefinita negli ambienti di test.
+
+Per i test non serve collegare il conto PayPal Business reale. Nel Checkout, selezionare PayPal e seguire la pagina di autorizzazione di prova; se compare il pulsante PayPal con login, Stripe può richiedere un account personale PayPal Sandbox. Non usare credenziali reali per simulare il pagamento. Provare anche autorizzazione rifiutata/annullata: non deve risultare pagato.
+
+Prima del live occorre collegare PayPal Business a Stripe e verificare l’abilitazione ai rinnovi; eventuali approvazioni dipendono dagli account. Non è un’operazione già eseguita da questo aggiornamento.
+
+Fonti: [abbonamenti PayPal su Stripe](https://docs.stripe.com/billing/subscriptions/paypal), [rinnovi PayPal](https://docs.stripe.com/payments/paypal/set-up-future-payments), [test Checkout PayPal](https://docs.stripe.com/payments/paypal/accept-a-payment), [attivazione live](https://docs.stripe.com/payments/paypal/activate).
+
+## 3. Aggiornare il servizio esistente
+
+La cartella da usare è **`/Users/emanuelecaminti/Desktop/REALVILLA-render`**, già collegata al repository esistente. Non creare un altro repository e non estrarre lo ZIP sopra `.git`. Il codice non si pubblica da solo.
+
+Nel Terminale del Mac, controllare prima l’elenco con:
 
 ```sh
-cd "/Users/emanuelecaminti/Desktop/REALVILLA"
+cd "/Users/emanuelecaminti/Desktop/REALVILLA-render"
 git status --short
-git add -- .env.example ATTIVAZIONE-SICURA.md VERIFICHE.md SANDBOX-RENDER.md account-auth.js billing-config.js mail-delivery.js stripe-billing.js public/account.js public/condizioni-pagamenti.html public/pagamenti.html public/payment-terms.js public/registration.js scripts/check-billing.js scripts/create-stripe-price.js scripts/test.js test/billing.test.js test/calendar.test.js test/fake-stripe.js test/http.test.js test/mail.test.js
-git diff --cached --stat
-git commit -m "Real Villa: quota iscrizione e calendario mensilita Sandbox"
+```
+
+Poi, se l’elenco corrisponde a questo aggiornamento, eseguire il blocco seguente; `&&` interrompe la sequenza in caso di errore:
+
+```sh
+git add -- billing-config.js stripe-billing.js public/pagamenti.html public/registration.js public/payment-terms.js public/condizioni-pagamenti.html public/i-miei-pagamenti.html scripts/test.js test/billing.test.js test/calendar.test.js test/http.test.js .env.example SANDBOX-RENDER.md ATTIVAZIONE-SICURA.md VERIFICHE.md &&
+git commit -m "Real Villa: carta e PayPal, prove anticipate solo Sandbox [skip render]" &&
 git push origin main
 ```
 
-Prima del commit, verificare che l’elenco contenga solo ciò che si intende pubblicare. Se GitHub segnala modifiche remote o un conflitto, non usare force push e non fare reset: fermarsi e verificare.
+Non usare force push o reset in caso di errore. Non aggiungere `.env`, database, backup o `node_modules`.
 
-In Render controllare repository `emanuelecaminif9/real-villa`, ramo `main`, tipo **Web Service / Node**, build `npm ci`, avvio `npm start`. Il caricamento può avviare automaticamente il deploy; se non lo fa, scegliere **Manual Deploy → Deploy latest commit**. Attendere lo stato **Live**. La pubblicazione del codice non abilita gli incassi reali, che restano bloccati dai valori di prova.
+Su Render, salvare le nuove variabili con **Save only**, poi **Manual Deploy → Deploy latest commit** per applicare insieme l’ultimo codice e le impostazioni. Il messaggio `[skip render]` evita un deploy automatico prima della configurazione. Attendere **Live**. Il semplice salvataggio delle variabili non aggiorna il processo già attivo.
 
-## 5. Prima prova e controlli indispensabili
+Fonte: [variabili Render](https://render.com/docs/configure-environment-variables), [skip deploy Render](https://render.com/docs/deploys#skipping-an-auto-deploy).
 
-1. Aprire **I miei pagamenti**, richiedere il codice alla propria email autorizzata dal mittente Resend e accedere. Controllare anche spam e log di consegna nel proprio pannello Resend.
-2. Dal 1° settembre aprire **Iscrizioni → pagamento**. Prima di procedere verificare importo subito, mensilità e prossima data: per un ingresso a settembre devono comparire 100 euro subito e l’8 ottobre come primo rinnovo. Prima del 1° settembre il checkout d’iscrizione deve restare bloccato; l’accesso email può invece essere provato appena configurato.
-3. Completare un pagamento utilizzando esclusivamente una carta di prova indicata nella [documentazione Stripe](https://docs.stripe.com/testing). Non usare una carta reale per questo collaudo.
-4. Controllare conferma, storico e ricevuta. Nella Sandbox Stripe verificare importo iniziale, carta salvata, prima mensilità e fine programmata. Può apparire «trial / prova»: il differimento riguarda soltanto i rinnovi, non rende gratuita l’iscrizione o l’eventuale mese già pagato.
-5. Verificare le consegne webhook. Le prove locali simulate non dimostrano che il webhook o la casella email reali siano configurati correttamente.
-6. Collaudare separatamente l’intera sequenza di rinnovi, il caso del 20 settembre, maggio, disdetta e sospensioni secondo la checklist completa. Non cambiare l’orologio del server online per simulare altri mesi.
+## 4. Prima prova
 
-### Attenzione al piano Free
+1. Aprire `/i-miei-pagamenti.html`, richiedere il codice alla propria email Resend e accedere. Usare dati fittizi per gli atleti.
+2. Aprire `/pagamenti.html`: deve comparire **PROVA SANDBOX** e, prima di settembre, **ingresso a settembre simulato**. Totale 100 euro, primo rinnovo 8 ottobre.
+3. Completare i dati e il consenso. **Continua · scegli carta o PayPal** apre il Checkout con entrambi i metodi.
+4. Carta test: `4242 4242 4242 4242`, scadenza futura e CVC di tre cifre. PayPal: procedura di test del punto 2. Fare le due prove con due atleti fittizi diversi: lo stesso atleta già iscritto viene bloccato per evitare duplicati.
+5. Verificare in Stripe e sul sito 100 euro pagati, un solo abbonamento, primo rinnovo 8 ottobre, ultimo 8 maggio e chiusura tecnica 8 giugno senza rata di giugno. Non considerare la sola pagina di ritorno come prova di pagamento.
 
-Il database SQLite locale si può perdere a ogni riavvio, deploy o sospensione del servizio: le protezioni locali dai duplicati e i riferimenti degli atleti non sopravvivono a tale perdita. **Usare solo dati fittizi, non riutilizzare un atleta di prova dopo una perdita di archivio senza prima controllare Stripe e non invitare famiglie a pagare realmente.** Stripe non perde i propri pagamenti per un riavvio del sito. Prima degli incassi reali serve storage persistente, servizio adeguato e verifica del ripristino. [Limiti ufficiali Render Free](https://render.com/docs/free).
+Fonte carta di test: [Stripe testing](https://docs.stripe.com/testing).
 
-L’acquisto di un dominio Aruba è separato dall’hosting dell’app: il normale Hosting Linux Aruba non esegue questo server Node.js. Si può collegare il dominio al servizio Render compatibile, senza caricare tutto su Hosting Linux. [Compatibilità Aruba](https://guide.aruba.it/faq/hosting-e-domini/linguaggi-e-spazio-web-linux), [domini personalizzati Render](https://render.com/docs/custom-domains).
+### Webhook e portale: completare il collaudo
+
+Nella stessa Sandbox configurare la destinazione `https://real-villa.onrender.com/stripe/webhook` con gli eventi elencati in `ATTIVAZIONE-SICURA.md`; mettere il relativo `whsec_…` in `STRIPE_WEBHOOK_SECRET`. Serve a confermare anche senza ritorno del browser e a riconciliare le scadenze. Carta e PayPal via Stripe usano lo stesso webhook.
+
+Per il pulsante del portale documenti configurare `STRIPE_PORTAL_CONFIGURATION_ID=bpc_…` tramite la guida completa; per l’area segreteria impostare `ADMIN_EMAILS` alla propria email verificata. Queste opzioni non sostituiscono le impostazioni email del punto 1. Verificare consegna webhook, ricevute, rinnovi, annullamenti e sospensioni per entrambi i metodi prima delle famiglie.
+
+**Render Free conserva il database solo in modo effimero:** un riavvio/deploy può perdere collegamenti, iscrizioni e protezioni locali dai duplicati. Usare soltanto Sandbox e dati fittizi; dopo un riavvio verificare prima gli abbonamenti su Stripe, non rifare automaticamente la stessa iscrizione. Prima del live servono archivio persistente, backup verificati e tutti i controlli in `ATTIVAZIONE-SICURA.md`.
+
+I test automatici sono simulati: non dimostrano ancora un pagamento riuscito sui tuoi account esterni.

@@ -151,7 +151,9 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
       if (settings?.checkoutMode === 'subscription') initialItems.push({ price: settings.priceId, quantity: 1 });
       const params = {
         mode: settings ? settings.checkoutMode : 'payment', locale: 'it', customer: customerId,
-        client_reference_id: id, metadata, expires_at: expiry, payment_method_types: ['card'],
+        // Both choices belong to ONE Checkout/mandate and the same seasonal ledger.
+        // PayPal is processed through Stripe, not the legacy standalone PayPal plan.
+        client_reference_id: id, metadata, expires_at: expiry, payment_method_types: settings ? ['card', 'paypal'] : ['card'],
         success_url: origin(env) + '/stripe/complete?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: origin(env) + (context === 'registration' ? '/cancel.html' : '/shop-cancel.html'),
         allow_promotion_codes: false,
@@ -169,10 +171,11 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
         const date = value => new Date(value * 1000).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' });
         const euros = value => (value / 100).toFixed(2).replace('.', ',') + ' EUR';
         const future = settings.firstRenewalAt ? `${euros(settings.amount)} ogni giorno 8 dal ${date(settings.firstRenewalAt)} al ${date(settings.lastPaymentAt)}.` : 'Nessun altro rinnovo per questa stagione.';
-        params.custom_text = { submit: { message: `Oggi ${euros(settings.dueNow)}: iscrizione ${euros(settings.registrationAmount)}${settings.paidMonth ? ` e mensilità intera ${settings.paidMonth} ${euros(settings.currentMonthAmount)}` : ''}. ${future} Nessuna nuova mensilità da giugno ad agosto. Il differimento Stripe non rende gratuita la mensilità pagata oggi.` } };
+        params.custom_text = { submit: { message: `${settings.sandboxCalendarPreview ? 'SOLO TEST: ingresso a settembre simulato. ' : ''}Oggi ${euros(settings.dueNow)}: iscrizione ${euros(settings.registrationAmount)}${settings.paidMonth ? ` e mensilità intera ${settings.paidMonth} ${euros(settings.currentMonthAmount)}` : ''}. ${future} Nessuna nuova mensilità da giugno ad agosto. Il differimento Stripe non rende gratuita la mensilità pagata oggi.` } };
         payload.payment_consent = { version: settings.consentVersion, terms: settings.version, accepted_at: iso(), policy: settings.policy,
           season: settings.id, season_end: settings.end, monthly_cents: settings.amount, registration_cents: settings.registrationAmount,
-          paid_month: settings.paidMonth, due_now_cents: settings.dueNow, first_renewal_at: settings.firstRenewalAt, renewals: settings.renewals };
+          paid_month: settings.paidMonth, due_now_cents: settings.dueNow, first_renewal_at: settings.firstRenewalAt, renewals: settings.renewals,
+          sandbox_calendar_preview: settings.sandboxCalendarPreview };
       }
       if (params.mode === 'payment') params.payment_intent_data = { receipt_email: email, metadata };
       transaction(db, () => {
@@ -345,7 +348,7 @@ function createStripeBilling({ db, env = process.env, clock = Date.now, stripe: 
     app.get('/api/billing/config', route(async (req, res) => {
       res.set('Cache-Control', 'no-store');
       const settings = await priceConfig(); allowMoney(env);
-      res.json({ ...settings, testMode: mode(env) === 'test', accessAvailable: auth.available() });
+      res.json({ ...settings, testMode: mode(env) === 'test', accessAvailable: auth.available(), paymentMethods: ['card', 'paypal'], paymentProcessor: 'stripe' });
     }));
     app.get('/api/account/overview', auth.required, route(async (req, res) => {
       auth.limit('overview:' + req.account.email, 40, 900);

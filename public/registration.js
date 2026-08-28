@@ -9,9 +9,12 @@
   const showError = error => { errorBox.textContent = error.message; errorBox.hidden = false; };
   async function init() {
     try {
-      const { account } = await RV.request('/api/account/me');
+      const { account, available } = await RV.request('/api/account/me');
       const access = document.getElementById('registrationAccess'); access.replaceChildren();
-      if (!account) {
+      if (!available) {
+        access.textContent = 'Accesso email non ancora configurato dalla società. Non è un problema della carta o di PayPal.';
+        button.textContent = 'Accesso email da configurare';
+      } else if (!account) {
         const link = RV.node('a', 'Verifica la tua email per iscriverti', 'billing-link'); link.href = 'i-miei-pagamenti.html?return=%2Fpagamenti.html'; access.append(link);
         button.textContent = 'Accedi prima di procedere';
       } else { access.textContent = 'Accesso verificato: ' + account.email; form.elements.email.value = account.email; form.elements.email.readOnly = true; }
@@ -23,8 +26,8 @@
       const paidMonth = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric', timeZone: 'Europe/Rome' }).format(new Date(config.paidMonth + '-15T12:00:00Z'));
       document.getElementById('dueNowDetail').textContent = `${RV.money(config.registrationAmount)} iscrizione + ${RV.money(config.currentMonthAmount)} mensilità di ${paidMonth}`;
       const future = config.firstRenewalAt ? `Il prossimo addebito di ${RV.money(config.amount)} è previsto l’${RV.date(config.firstRenewalAt)}; l’ultimo l’${RV.date(config.lastPaymentAt)}.` : 'Non sono previsti altri rinnovi per questa stagione.';
-      document.getElementById('registrationConfig').textContent = `${config.testMode ? 'PROVA SANDBOX · Nessun denaro reale. ' : ''}Oggi ${RV.money(config.dueNow)}: iscrizione una tantum e mese d’ingresso intero (${paidMonth}). ${future} Nessuna nuova mensilità a giugno, luglio o agosto.`;
-      if (account && config.accessAvailable) { button.disabled = false; button.textContent = 'Conferma e paga con Stripe'; }
+      document.getElementById('registrationConfig').textContent = `${config.testMode ? 'PROVA SANDBOX · Nessun denaro reale. ' : ''}${config.sandboxCalendarPreview ? 'Ingresso a settembre simulato per il collaudo anticipato. Le iscrizioni reali aprono il 1° settembre. ' : ''}Oggi ${RV.money(config.dueNow)}: iscrizione una tantum e mese d’ingresso intero (${paidMonth}). ${future} Nessuna nuova mensilità a giugno, luglio o agosto.`;
+      if (account && config.accessAvailable) { button.disabled = false; button.textContent = 'Continua · scegli carta o PayPal'; }
     } catch (error) { document.getElementById('registrationConfig').textContent = error.message; button.textContent = 'Iscrizioni online non disponibili'; }
   }
   form.addEventListener('submit', async event => {
@@ -41,7 +44,7 @@
     } catch (error) {
       showError(error);
       if (error.status === 410) { requestKey = crypto.randomUUID(); try { sessionStorage.setItem(storedKey, requestKey); } catch {} }
-      button.disabled = false; button.textContent = 'Conferma e paga con Stripe';
+      button.disabled = false; button.textContent = 'Continua · scegli carta o PayPal';
     }
   });
   init();

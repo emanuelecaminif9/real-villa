@@ -23,6 +23,45 @@ test('configuration refuses missing dates and unapproved billing policy', () => 
   assert.throws(() => season({ SEASON_ID: 'test', SEASON_END_AT: '2027-02-30T00:00:00Z' }));
   assert.throws(() => season({ SEASON_ID: 'test', SEASON_END_AT: '2027-06-30T00:00:00Z', BILLING_POLICY: 'invented' }));
 });
+test('new seasonal checkout offers card and PayPal in one session with identical amounts and dates', async t => {
+  const f = fixture(t); const requestKey = randomUUID();
+  const result = await f.start({ requestKey });
+  const session = f.fake.state.sessions.get(f.sessionFor(result));
+  assert.deepEqual(session.payment_method_types, ['card', 'paypal']);
+  assert.equal(session.amount_total, 10000); assert.equal(session.payment_method_collection, 'always');
+  assert.equal(session.subscription_data.trial_end, Date.parse('2026-10-08T08:00:00Z') / 1000);
+  assert.equal((await f.start({ requestKey })).orderId, result.orderId); assert.equal(f.fake.state.creates, 1);
+});
+test('May also offers PayPal and card without starting a subscription', async t => {
+  const f = fixture(t); f.setTime(Date.parse('2027-05-20T12:00:00Z'));
+  const result = await f.start(); const session = f.fake.state.sessions.get(f.sessionFor(result));
+  assert.deepEqual(session.payment_method_types, ['card', 'paypal']);
+  assert.equal(session.mode, 'payment'); assert.equal(session.amount_total, 10000);
+});
+test('August Sandbox checkout requires email and consent, records preview, then reconciles season end once', async t => {
+  const f = fixture(t); f.setTime(Date.parse('2026-08-28T12:00:00Z'));
+  Object.assign(f.env, { SANDBOX_EARLY_REGISTRATION: 'true', LIVE_PAYMENTS_ENABLED: 'false' });
+  await assert.rejects(f.start({ account: null }), /email/);
+  await assert.rejects(f.start({ accepted: false }), /condizioni/);
+  assert.equal(f.fake.state.creates, 0);
+  const result = await f.start(); const sessionId = f.sessionFor(result);
+  const pending = f.fake.state.sessions.get(sessionId);
+  assert.equal(pending.expires_at, Math.floor(f.clock() / 1000) + 3600);
+  assert.match(pending.custom_text.submit.message, /SOLO TEST/);
+  assert.equal(JSON.parse(f.db.prepare('SELECT payload FROM payment_orders').get().payload).payment_consent.sandbox_calendar_preview, true);
+  // An abandoned/failed provider authentication is not a successful payment.
+  await f.billing.complete(pending);
+  assert.equal(f.db.prepare('SELECT status FROM payment_orders').get().status, 'PENDING');
+  const paid = f.fake.paid(sessionId); await f.billing.complete(paid); await f.billing.complete(paid);
+  assert.equal(f.db.prepare('SELECT status FROM payment_orders').get().status, 'PAID');
+  assert.equal(f.fake.state.subs.get(paid.subscription).cancel_at, Date.parse('2027-06-08T08:00:00Z') / 1000);
+  assert.equal(f.fake.state.subs.size, 1);
+});
+test('early test flag blocks live payments even with all other live approvals', () => {
+  assert.throws(() => allowMoney({ SANDBOX_EARLY_REGISTRATION: 'true', STRIPE_MODE: 'live', STRIPE_SECRET_KEY: 'sk_live_fake',
+    LIVE_PAYMENTS_ENABLED: 'true', BASE_URL: 'https://example.test', PAYMENTS_STORAGE_CONFIRMED: 'true',
+    PAYMENTS_DB_PATH: '/var/data/payments.db', STRIPE_WEBHOOK_SECRET: 'whsec_fake', STRIPE_RECEIPTS_CONFIGURED: 'true' }), /prova anticipata/);
+});
 test('return origin and Stripe URLs reject credential, protocol and suffix attacks', () => {
   assert.throws(() => origin({ BASE_URL: 'https://example.test/path' }));
   assert.throws(() => origin({ BASE_URL: 'http://example.test' }));

@@ -9,6 +9,32 @@ function quote(at, overrides = {}) {
   const clock = () => Date.parse(at); return registrationQuote(season({ ...env, ...overrides }, clock), clock);
 }
 const iso = seconds => new Date(seconds * 1000).toISOString();
+const earlySandbox = { SANDBOX_EARLY_REGISTRATION: 'true', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fake', LIVE_PAYMENTS_ENABLED: 'false' };
+
+test('explicit Sandbox opening simulates September while keeping real time and October first renewal', () => {
+  const result = quote('2026-08-28T12:00:00+02:00', earlySandbox);
+  assert.equal(result.sandboxCalendarPreview, true); assert.equal(result.paidMonth, '2026-09');
+  assert.equal(result.dueNow, 10000); assert.equal(result.renewals.length, 8);
+  assert.equal(iso(result.firstRenewalAt), '2026-10-08T08:00:00.000Z');
+  assert.equal(iso(result.quoteValidUntil), '2026-08-31T22:00:00.000Z');
+});
+test('early test flag fails closed with live credentials, mode, activation or missing explicit safety values', () => {
+  for (const override of [{ STRIPE_MODE: 'live' }, { STRIPE_SECRET_KEY: 'sk_live_fake' },
+    { LIVE_PAYMENTS_ENABLED: 'true' }, { LIVE_PAYMENTS_ENABLED: undefined }, { STRIPE_MODE: undefined }, { STRIPE_SECRET_KEY: '' }])
+    assert.throws(() => quote('2026-08-28T12:00:00Z', { ...earlySandbox, ...override }), error => error.status === 503);
+});
+test('Sandbox override cannot reopen a closed season or change late-entry rules', () => {
+  assert.throws(() => quote('2027-06-01T12:00:00Z', earlySandbox), /chiuse/);
+  const december = quote('2026-12-20T12:00:00Z', earlySandbox);
+  assert.equal(december.sandboxCalendarPreview, false); assert.equal(december.paidMonth, '2026-12');
+  assert.equal(december.renewals.length, 5);
+});
+test('test preview consent expires at September opening and cannot silently become real enrollment', () => {
+  const preview = quote('2026-08-28T12:00:00Z', earlySandbox);
+  const opened = quote('2026-09-01T12:00:00Z', earlySandbox);
+  assert.equal(opened.sandboxCalendarPreview, false);
+  assert.notEqual(preview.consentVersion, opened.consentVersion);
+});
 
 test('20 September: 50 registration + 50 September, then eight full monthly payments', () => {
   const result = quote('2026-09-20T12:00:00+02:00');

@@ -7,10 +7,10 @@ const { openDatabase } = require('../database');
 const { createStripeBilling } = require('../stripe-billing');
 const { fakeStripe } = require('./fake-stripe');
 
-async function setup(t, { mailFailure = false } = {}) {
+async function setup(t, { mailFailure = false, clock = Date.now } = {}) {
   const db = openDatabase(':memory:'); const fake = fakeStripe(Date.now); const mailbox = [];
   const env = { STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_fake', STRIPE_WEBHOOK_SECRET: 'whsec_fake', AUTH_SECRET: 'test-only-private-secret-'.repeat(4), ADMIN_EMAILS: 'staff@example.test', STRIPE_PORTAL_CONFIGURATION_ID: 'bpc_test' };
-  const billing = createStripeBilling({ db, env, stripe: fake.api, sendMail: async mail => { mailbox.push(mail); if (mailFailure) throw new Error('private-provider-error'); } });
+  const billing = createStripeBilling({ db, env, clock, stripe: fake.api, sendMail: async mail => { mailbox.push(mail); if (mailFailure) throw new Error('private-provider-error'); } });
   const app = express(); billing.installWebhook(app); app.use(express.json()); billing.installRoutes(app);
   const server = app.listen(0, '127.0.0.1'); await once(server, 'listening'); env.BASE_URL = `http://127.0.0.1:${server.address().port}`;
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); db.close(); });
@@ -32,6 +32,17 @@ test('protected history/admin endpoints reject anonymous requests and invented c
   for (const path of ['/api/account/overview', '/api/account/history?customer=cus_a', '/api/account/orders', '/api/admin/overview']) {
     assert.equal((await f.request(path)).status, 401); assert.equal((await f.request(path, undefined, 'rv_session=' + 'a'.repeat(64))).status, 401);
   }
+});
+test('public config exposes both registration methods and explicit preview, never keys or unauthenticated history', async t => {
+  const f = await setup(t, { clock: () => Date.parse('2026-08-28T12:00:00Z') });
+  Object.assign(f.env, { SANDBOX_EARLY_REGISTRATION: 'true', LIVE_PAYMENTS_ENABLED: 'false', SEASON_ID: '2026-2027',
+    BILLING_POLICY: 'calendar_full_months_day8', PAYMENT_TERMS_VERSION: 'sandbox-v4', PAYMENT_TERMS_APPROVED: 'true', STRIPE_SUBSCRIPTION_PRICE_ID: 'price_monthly' });
+  const result = await f.request('/api/billing/config');
+  assert.equal(result.status, 200); assert.equal(result.data.sandboxCalendarPreview, true);
+  assert.equal(result.data.dueNow, 10000); assert.deepEqual(result.data.paymentMethods, ['card', 'paypal']);
+  assert.equal(result.cache, 'no-store'); assert.doesNotMatch(JSON.stringify(result.data), /sk_test_|whsec_|AUTH_SECRET/);
+  assert.equal((await f.request('/api/account/history?customer=cus_a')).status, 401);
+  f.env.LIVE_PAYMENTS_ENABLED = 'true'; assert.equal((await f.request('/api/billing/config')).status, 503);
 });
 test('CSRF checks reject foreign origins and missing custom header', async t => {
   const f = await setup(t);
