@@ -10,6 +10,7 @@ const server = app.listen(0, "127.0.0.1", async () => {
   let exitCode = 0;
   try {
     const checkout = await fetch(`${base}/checkout.html`);
+    const checkoutText = await checkout.text();
     const area = await fetch(`${base}/i-miei-pagamenti.html`);
     const staff = await fetch(`${base}/segreteria.html`);
     const terms = await fetch(`${base}/condizioni-pagamenti.html`);
@@ -20,6 +21,7 @@ const server = app.listen(0, "127.0.0.1", async () => {
     const calendario = await fetch(`${base}/Calendario.html`);
     const squadre = await fetch(`${base}/Squadre.html`);
     const shop = await fetch(`${base}/Shop.html`);
+    const shopText = await shop.text();
     const invalidPayment = await fetch(`${base}/api/payments/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -64,8 +66,10 @@ const server = app.listen(0, "127.0.0.1", async () => {
       results.calendario !== 200 ||
       results.squadre !== 200 ||
       results.shop !== 200 ||
-      results.invalidPayment !== 403 ||
-      results.unsupportedProvider !== 403 ||
+      !checkoutText.includes('Pagamenti online') ||
+      !shopText.includes('Disponibili a breve') ||
+      results.invalidPayment !== 503 ||
+      results.unsupportedProvider !== 503 ||
       results.stripeWebhook !== 503 ||
       results.missingOrder !== 401
     )

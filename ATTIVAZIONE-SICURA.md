@@ -147,6 +147,12 @@ Lo shop PayPal è conservato ma disabilitato per impostazione predefinita (`PAYP
 
 ## 6. Pubblicazione e passaggio live
 
+### Pubblicazione temporanea senza pagamenti
+
+Impostare `PUBLIC_PAYMENTS_ENABLED=false` su Render. Le pagine Iscrizioni, Shop, Checkout e area pagamenti restano nel progetto, ma il server mostra la pagina «Pagamenti online disponibili a breve» e rifiuta ogni nuova richiesta a `/api/payments/start`. Non eliminare file né credenziali per ottenere questa sospensione.
+
+Riportare il valore a `true` soltanto dopo il collaudo e l'approvazione al passaggio live descritti sotto. Questo interruttore non sostituisce `LIVE_PAYMENTS_ENABLED`: entrambi devono essere configurati correttamente prima di incassare denaro reale.
+
 Non è stato effettuato alcun deploy né push. Conservare una copia della versione attualmente online e dell’archivio prima di sostituire i file del repository. Non sostituire la directory `.git` o il database con quelli di un altro computer.
 
 Per il caricamento e la configurazione di prova seguire anche [SANDBOX-RENDER.md](SANDBOX-RENDER.md). Render Free non conserva il database SQLite tra riavvii/deploy: è ammesso qui solo come ambiente di prova sacrificabile, non per incassi reali o per certificare la persistenza dell’archivio. Non copiare l’intera cartella sul normale Hosting Linux Aruba: il server Node.js non è supportato da quel prodotto. È invece possibile acquistare il dominio presso Aruba e collegarlo al servizio Node.js compatibile.
